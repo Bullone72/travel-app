@@ -1,0 +1,7 @@
+node_modules
+android
+*.apk
+*.keystore
+.git
+.vercel
+dist

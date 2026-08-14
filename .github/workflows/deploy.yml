@@ -16,6 +16,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Configura git author
+        run: |
+          git config user.name "Alessandro"
+          git config user.email "alessandro.nullo@etik.com"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'travelmate-v6';
+﻿const CACHE_NAME = 'travelmate-v7';
 const ASSETS = [
   '/',
   '/index.html',

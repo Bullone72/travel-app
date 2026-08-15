@@ -22,7 +22,7 @@ export default function MapPage() {
   const [searchPoints, setSearchPoints] = useState([]);
   const [detecting, setDetecting] = useState(false);
   const [altRoutes, setAltRoutes] = useState([]);
-  const [selectedAlt, setSelectedAlt] = useState(0);
+  const [selectedAlts, setSelectedAlts] = useState([]);
 
   useEffect(() => {
     loadTripData(id);
@@ -119,7 +119,7 @@ export default function MapPage() {
 
   useEffect(() => {
     if (mapInstance.current) renderMap();
-  }, [activeDay, viewMode, tripItems, searchPoints, selectedAlt, altRoutes]);
+  }, [activeDay, viewMode, tripItems, searchPoints, selectedAlts, altRoutes]);
 
   useEffect(() => {
     if (viewMode === 'itinerary') {
@@ -129,34 +129,40 @@ export default function MapPage() {
       setRouteKm(null);
       setRouteDuration(null);
       setAltRoutes([]);
-      setSelectedAlt(0);
+      setSelectedAlts([]);
     }
   }, [viewMode, activeDay]);
 
-  async function getDayRoutePoints() {
+  useEffect(() => {
+    if (viewMode === 'itinerary' && altRoutes.length > 0) {
+      calculateRouteDistance();
+    }
+  }, [selectedAlts, altRoutes]);
+
+  function getDaySegments() {
     const ordered = [...dayItems].sort(sortByTime);
-    const pts = [];
+    const segments = [];
     for (const item of ordered) {
-      const itemPts = getRoutePointsForItem(item);
-      for (const p of itemPts) {
-        const last = pts[pts.length - 1];
-        if (!last || last.lat !== p.lat || last.lng !== p.lng) pts.push(p);
+      const pts = getRoutePointsForItem(item);
+      if (pts.length >= 2) {
+        for (let i = 0; i < pts.length - 1; i++) {
+          segments.push({ a: pts[i], b: pts[i + 1], mode: item.transportMode });
+        }
       }
     }
-    return pts;
+    return segments;
   }
 
   async function fetchAlternatives() {
-    const pts = await getDayRoutePoints();
-    if (pts.length < 2) {
+    const segments = getDaySegments();
+    if (segments.length === 0) {
       setAltRoutes([]);
-      setSelectedAlt(0);
+      setSelectedAlts([]);
       return;
     }
-    const firstMode = dayItems.find(i => i.transportMode)?.transportMode || 'auto';
-    const routes = await getRouteAlternatives(pts, firstMode);
+    const routes = await Promise.all(segments.map(s => getRouteAlternatives([s.a, s.b], s.mode)));
     setAltRoutes(routes);
-    setSelectedAlt(0);
+    setSelectedAlts(routes.map(() => 0));
   }
 
   async function renderMap() {
@@ -175,12 +181,23 @@ export default function MapPage() {
 
     if (viewMode === 'itinerary') {
       const ordered = [...dayItems].sort(sortByTime);
+      const segments = getDaySegments();
       let allCoords = [];
-      let colorIdx = 0;
 
-      if (altRoutes.length > 0 && altRoutes[selectedAlt]) {
-        addRouteSegment(map, altRoutes[selectedAlt].coordinates, DAY_COLORS[activeDay % DAY_COLORS.length]);
-        allCoords = allCoords.concat(altRoutes[selectedAlt].coordinates);
+      if (segments.length > 0 && altRoutes.length === segments.length) {
+        for (let s = 0; s < segments.length; s++) {
+          const alts = altRoutes[s] || [];
+          const route = alts[selectedAlts[s]] || null;
+          let coords = route?.coordinates || null;
+          if (!coords) {
+            const seg = await getRouteDistance(segments[s].a, segments[s].b, segments[s].mode);
+            coords = seg?.coordinates || null;
+          }
+          if (coords) {
+            addRouteSegment(map, coords, DAY_COLORS[activeDay % DAY_COLORS.length]);
+            allCoords = allCoords.concat(coords);
+          }
+        }
       } else {
         for (const item of ordered) {
           const pts = getRoutePointsForItem(item);
@@ -196,7 +213,6 @@ export default function MapPage() {
           if (pts.length === 0 && item.lat && item.lng) {
             allCoords.push({ lat: item.lat, lng: item.lng });
           }
-          colorIdx++;
         }
       }
       if (allCoords.length >= 2) {
@@ -250,17 +266,7 @@ export default function MapPage() {
   }
 
   async function calculateRouteDistance() {
-    if (altRoutes.length > 0 && altRoutes[selectedAlt]) {
-      setRouteKm(Math.round(altRoutes[selectedAlt].distanceKm * 10) / 10);
-      setRouteDuration(Math.round(altRoutes[selectedAlt].durationMin));
-      return;
-    }
-    const ordered = [...dayItems].sort(sortByTime);
-    let segments = [];
-    for (const item of ordered) {
-      const pts = getRoutePointsForItem(item);
-      if (pts.length >= 2) segments.push({ a: pts[0], b: pts[pts.length - 1], mode: item.transportMode });
-    }
+    const segments = getDaySegments();
     if (segments.length === 0) {
       setRouteKm(null);
       setRouteDuration(null);
@@ -269,8 +275,9 @@ export default function MapPage() {
     setLoadingRoute(true);
     let total = 0;
     let minutes = 0;
-    for (const seg of segments) {
-      const route = await getRouteDistance(seg.a, seg.b, seg.mode);
+    for (let s = 0; s < segments.length; s++) {
+      const alts = altRoutes[s];
+      const route = (alts && alts[selectedAlts[s]]) || (await getRouteDistance(segments[s].a, segments[s].b, segments[s].mode));
       if (route) {
         total += route.distanceKm;
         minutes += route.durationMin;
@@ -359,22 +366,35 @@ export default function MapPage() {
         )}
       </div>
 
-      {altRoutes.length > 1 && (
-        <div className="route-options">
-          {altRoutes.map((r, i) => (
-            <button
-              key={i}
-              className={`route-option ${selectedAlt === i ? 'active' : ''}`}
-              onClick={() => { setSelectedAlt(i); }}
-            >
-              Percorso {i + 1} · {formatKm(r.distanceKm)} km · {formatDuration(Math.round(r.durationMin))}
-            </button>
-          ))}
-        </div>
-      )}
-      {altRoutes.length === 1 && (
-        <div className="route-options">
-          <span className="route-option active">Unico percorso · {formatKm(altRoutes[0].distanceKm)} km · {formatDuration(Math.round(altRoutes[0].durationMin))}</span>
+      {viewMode === 'itinerary' && altRoutes.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          {getDaySegments().map((seg, s) => {
+            const alts = altRoutes[s] || [];
+            const sel = selectedAlts[s] || 0;
+            if (alts.length <= 1) return null;
+            return (
+              <div key={s} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                  Tragitto {s + 1}: {seg.a.label || 'A'} → {seg.b.label || 'B'}
+                </div>
+                <div className="route-options" style={{ marginBottom: 0 }}>
+                  {alts.map((r, i) => (
+                    <button
+                      key={i}
+                      className={`route-option ${sel === i ? 'active' : ''}`}
+                      onClick={() => {
+                        const next = [...selectedAlts];
+                        next[s] = i;
+                        setSelectedAlts(next);
+                      }}
+                    >
+                      Percorso {i + 1} · {formatKm(r.distanceKm)} km · {formatDuration(Math.round(r.durationMin))}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

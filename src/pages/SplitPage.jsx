@@ -288,7 +288,7 @@ export default function SplitPage() {
             <div className="modal-handle" />
             <h2 className="modal-title">⚙️ Esclusione di {exclusionFor.name}</h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 12 }}>
-              Scegli da quali spese escluderlo. Le spese NON spuntate restano divise anche con lui.
+              Di default è <strong>incluso in tutte</strong> le spese. Metti la spunta sulle voci da cui vuoi escluderlo.
             </p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button className="btn btn-secondary btn-sm" onClick={() => {
@@ -314,21 +314,22 @@ export default function SplitPage() {
                   <label key={e.id} className="checkbox-group" style={{
                     display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0',
                     borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                    opacity: excluded ? 0.6 : 1,
                   }}
                     onClick={() => setExclusionDraft({ ...exclusionDraft, [e.id]: !excluded })}
                   >
-                    <input type="checkbox" checked={!excluded} readOnly />
-                    <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-sm)', background: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                    <input type="checkbox" checked={excluded} readOnly />
+                    <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-sm)', background: excluded ? 'rgba(239,68,68,0.15)' : 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
                       {catInfo?.icon}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{e.description}</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, textDecoration: excluded ? 'line-through' : 'none' }}>{e.description}</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                         {catInfo?.label} · {new Date(e.date).toLocaleDateString('it-IT')}
                         {e.paidBy && ` · ${e.paidBy}`}
                       </div>
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary-light)', flexShrink: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: excluded ? 'var(--danger)' : 'var(--primary-light)', flexShrink: 0 }}>
                       {formatCurrency(e.amount)}
                     </div>
                   </label>

@@ -28,6 +28,7 @@ export function createExpense(data = {}) {
     paidBy: data.paidBy || '',
     date: data.date || new Date().toISOString().split('T')[0],
     splitAmong: data.splitAmong || [],
+    excludedFrom: data.excludedFrom || [],
     isShared: data.isShared || false,
     receiptImage: data.receiptImage || null,
     createdAt: new Date().toISOString(),

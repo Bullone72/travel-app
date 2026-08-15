@@ -664,6 +664,97 @@ body {
   background-clip: text;
 }
 
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.excluded-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.btn-warning {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border: 1px solid var(--warning) !important;
+  color: var(--warning) !important;
+}
+
+.transfer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+}
+
+.transfer-from {
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.transfer-arrow {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+}
+
+.transfer-to {
+  font-weight: 600;
+  color: var(--success);
+}
+
+.transfer-amount {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--primary-light);
+}
+
+.route-options {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0;
+  margin-bottom: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.route-option {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.route-option.active {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  border-color: transparent;
+  color: white;
+}
+
 .day-tabs {
   display: flex;
   gap: 8px;

@@ -5,20 +5,22 @@ import { formatCurrency, EXPENSE_CATEGORIES } from '../utils/helpers';
 
 export default function SplitPage() {
   const { id } = useParams();
-  const { participants, expenses, addParticipant, updateParticipant, removeParticipant, loadTripData } = useApp();
+  const { participants, expenses, addParticipant, updateExpense, removeParticipant, loadTripData } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', email: '' });
   const [expandedParticipant, setExpandedParticipant] = useState(null);
+  const [exclusionFor, setExclusionFor] = useState(null);
+  const [exclusionDraft, setExclusionDraft] = useState({});
 
   useEffect(() => {
     loadTripData(id);
   }, [id]);
 
   const tripParticipants = participants.filter(p => p.tripId === id);
-  const activeParticipants = tripParticipants.filter(p => !p.isExcluded);
   const tripExpenses = expenses.filter(e => e.tripId === id);
+  const sharedExpenses = tripExpenses.filter(e => e.isShared);
   const totalAll = tripExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-  const sharedTotal = tripExpenses.filter(e => e.isShared).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const sharedTotal = sharedExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
   function handleAdd(e) {
     e.preventDefault();
@@ -26,10 +28,6 @@ export default function SplitPage() {
     addParticipant({ ...form, tripId: id });
     setForm({ name: '', email: '' });
     setShowModal(false);
-  }
-
-  function toggleExcluded(p) {
-    updateParticipant({ ...p, isExcluded: !p.isExcluded });
   }
 
   function getParticipantExpenses(name) {
@@ -41,10 +39,11 @@ export default function SplitPage() {
   }
 
   function getSplitters(e) {
+    let base = tripParticipants.filter(p => !p.isExcluded);
     if (e.splitAmong && e.splitAmong.length > 0) {
-      return activeParticipants.filter(p => e.splitAmong.includes(p.name));
+      base = base.filter(p => e.splitAmong.includes(p.name));
     }
-    return activeParticipants;
+    return base.filter(p => !(e.excludedFrom || []).includes(p.name));
   }
 
   function getParticipantOwed(name) {
@@ -57,8 +56,7 @@ export default function SplitPage() {
       }
       const splitters = getSplitters(e);
       if (splitters.length === 0) continue;
-      const includes = splitters.some(p => p.name === name);
-      if (!includes) continue;
+      if (!splitters.some(p => p.name === name)) continue;
       owed += amount / splitters.length;
     }
     return owed;
@@ -66,6 +64,32 @@ export default function SplitPage() {
 
   function getBalance(name) {
     return getParticipantPaid(name) - getParticipantOwed(name);
+  }
+
+  function getExcludedCount(name) {
+    return sharedExpenses.filter(e => (e.excludedFrom || []).includes(name)).length;
+  }
+
+  function openExclusion(p) {
+    const draft = {};
+    sharedExpenses.forEach(e => {
+      draft[e.id] = (e.excludedFrom || []).includes(p.name);
+    });
+    setExclusionFor(p);
+    setExclusionDraft(draft);
+  }
+
+  async function saveExclusion() {
+    const name = exclusionFor.name;
+    for (const e of sharedExpenses) {
+      const excluded = !!exclusionDraft[e.id];
+      const cur = e.excludedFrom || [];
+      const curExcluded = cur.includes(name);
+      if (excluded === curExcluded) continue;
+      const next = excluded ? [...cur, name] : cur.filter(n => n !== name);
+      await updateExpense({ ...e, excludedFrom: next });
+    }
+    setExclusionFor(null);
   }
 
   return (
@@ -79,8 +103,10 @@ export default function SplitPage() {
           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 8 }}>
             Spese da dividere: <strong>{formatCurrency(sharedTotal)}</strong>
           </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            {tripParticipants.length} partecipanti ({activeParticipants.length} in divisione) · {tripExpenses.length} spese totali
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 10 }}>
+            <span className="stat-chip">{tripParticipants.length} 👥 partecipanti</span>
+            <span className="stat-chip">{tripExpenses.length} 🧾 spese</span>
+            <span className="stat-chip">{sharedExpenses.length} 🔄 da dividere</span>
           </div>
         </div>
       )}
@@ -102,18 +128,21 @@ export default function SplitPage() {
           const pOwed = getParticipantOwed(p.name);
           const balance = pPaid - pOwed;
           const isExpanded = expandedParticipant === p.id;
+          const excludedCount = getExcludedCount(p.name);
 
           return (
-            <div key={p.id} className="card" style={{ opacity: p.isExcluded ? 0.55 : 1 }}>
+            <div key={p.id} className="card" style={{ borderColor: excludedCount > 0 ? 'var(--warning)' : undefined }}>
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
                 onClick={() => setExpandedParticipant(isExpanded ? null : p.id)}
               >
-                <div className="participant-avatar" style={p.isExcluded ? { filter: 'grayscale(1)' } : undefined}>{p.name.charAt(0).toUpperCase()}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: '1rem' }}>
+                <div className="participant-avatar" style={excludedCount > 0 ? { filter: 'grayscale(1)' } : undefined}>{p.name.charAt(0).toUpperCase()}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     {p.name}
-                    {p.isExcluded && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 6 }}>(escluso dalla divisione)</span>}
+                    {excludedCount > 0 && (
+                      <span className="excluded-badge">escluso da {excludedCount} {excludedCount === 1 ? 'spesa' : 'spese'}</span>
+                    )}
                   </div>
                   {p.email && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.email}</div>}
                 </div>
@@ -121,23 +150,21 @@ export default function SplitPage() {
                   <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-light)' }}>
                     {formatCurrency(pPaid)}
                   </div>
-                  {!p.isExcluded && (
-                    <div style={{
-                      fontSize: '0.75rem', fontWeight: 600,
-                      color: balance >= 0 ? 'var(--success)' : 'var(--danger)',
-                    }}>
-                      {balance >= 0 ? 'deve ricevere ' : 'deve dare '}
-                      {formatCurrency(Math.abs(balance))}
-                    </div>
-                  )}
+                  <div style={{
+                    fontSize: '0.75rem', fontWeight: 600,
+                    color: balance >= 0 ? 'var(--success)' : 'var(--danger)',
+                  }}>
+                    {balance >= 0 ? 'deve ricevere ' : 'deve dare '}
+                    {formatCurrency(Math.abs(balance))}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                   <button
-                    className={`btn btn-sm ${p.isExcluded ? 'btn-secondary' : 'btn-primary'}`}
-                    onClick={(e) => { e.stopPropagation(); toggleExcluded(p); }}
-                    title={p.isExcluded ? 'Includi nella divisione' : 'Escludi dalla divisione'}
+                    className={`btn btn-sm ${excludedCount > 0 ? 'btn-warning' : 'btn-primary'}`}
+                    onClick={(e) => { e.stopPropagation(); openExclusion(p); }}
+                    title="Scegli da quali spese escludere"
                   >
-                    {p.isExcluded ? '🙋 Includi' : '🙅 Escludi'}
+                    ⚙️
                   </button>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                     {isExpanded ? '▲' : '▼'}
@@ -202,6 +229,12 @@ export default function SplitPage() {
                       );
                     })
                   )}
+
+                  {sharedExpenses.length > 0 && (
+                    <button className="btn btn-secondary btn-sm" onClick={() => openExclusion(p)} style={{ marginTop: 8 }}>
+                      {excludedCount > 0 ? `⚙️ Modifica esclusioni (${excludedCount})` : '⚙️ Escludi da singole spese'}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -209,17 +242,18 @@ export default function SplitPage() {
         })
       )}
 
-      {activeParticipants.length > 1 && (
+      {sharedExpenses.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-title" style={{ marginBottom: 12 }}>📊 Riepilogo compensi</div>
+          <div className="card-title" style={{ marginBottom: 8 }}>📊 Riepilogo compensi</div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 12 }}>
             Chi deve dare cosa a chi per pareggiare
           </p>
           {(() => {
-            const balances = activeParticipants.map(p => ({
-              name: p.name,
-              balance: getBalance(p.name),
-            }));
+            const participantsWithBalance = tripParticipants.filter(p => Math.abs(getBalance(p.name)) > 0.01);
+            if (participantsWithBalance.length === 0) {
+              return <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Tutti in pari! Nessun compenso necessario.</p>;
+            }
+            const balances = participantsWithBalance.map(p => ({ name: p.name, balance: getBalance(p.name) }));
             const debtors = balances.filter(b => b.balance < 0).sort((a, b) => a.balance - b.balance);
             const creditors = balances.filter(b => b.balance > 0).sort((a, b) => b.balance - a.balance);
             const transfers = [];
@@ -236,29 +270,76 @@ export default function SplitPage() {
               if (Math.abs(dCopy[i].balance) < 0.01) i++;
               if (Math.abs(cCopy[j].balance) < 0.01) j++;
             }
-            if (transfers.length === 0) return <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Tutti in pari! Nessun compenso necessario.</p>;
             return transfers.map((t, idx) => (
-              <div key={idx} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
-                background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', marginBottom: 6,
-                fontSize: '0.85rem',
-              }}>
-                <span style={{ fontWeight: 600, color: 'var(--danger)' }}>{t.from}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>→</span>
-                <span style={{ fontWeight: 600, color: 'var(--success)' }}>{t.to}</span>
-                <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--primary-light)' }}>{formatCurrency(t.amount)}</span>
+              <div key={idx} className="transfer-row">
+                <span className="transfer-from">{t.from}</span>
+                <span className="transfer-arrow">→</span>
+                <span className="transfer-to">{t.to}</span>
+                <span className="transfer-amount">{formatCurrency(t.amount)}</span>
               </div>
             ));
           })()}
         </div>
       )}
 
-      {tripParticipants.some(p => p.isExcluded) && (
-        <div className="card" style={{ marginTop: 16, background: 'var(--bg-warning)', borderColor: 'var(--warning)' }}>
-          <div className="card-title" style={{ marginBottom: 6, color: 'var(--warning)' }}>⚠️ Viaggiatori esclusi</div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
-            Le spese condivise vengono divise solo tra i viaggiatori inclusi. I viaggiatori esclusi continuano a dover ricevere quanto hanno anticipato per le spese condivise, ma non contribuiscono alla loro quota.
-          </p>
+      {exclusionFor && (
+        <div className="modal-overlay" onClick={() => setExclusionFor(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-handle" />
+            <h2 className="modal-title">⚙️ Esclusione di {exclusionFor.name}</h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 12 }}>
+              Scegli da quali spese escluderlo. Le spese NON spuntate restano divise anche con lui.
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => {
+                const draft = {};
+                sharedExpenses.forEach(e => draft[e.id] = true);
+                setExclusionDraft(draft);
+              }}>
+                🚫 Escludi da tutte
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => {
+                const draft = {};
+                sharedExpenses.forEach(e => draft[e.id] = false);
+                setExclusionDraft(draft);
+              }}>
+                🙋 Includi in tutte
+              </button>
+            </div>
+            <div style={{ maxHeight: '45vh', overflowY: 'auto' }}>
+              {sharedExpenses.map(e => {
+                const catInfo = EXPENSE_CATEGORIES.find(c => c.value === e.category);
+                const excluded = !!exclusionDraft[e.id];
+                return (
+                  <label key={e.id} className="checkbox-group" style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0',
+                    borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                  }}
+                    onClick={() => setExclusionDraft({ ...exclusionDraft, [e.id]: !excluded })}
+                  >
+                    <input type="checkbox" checked={!excluded} readOnly />
+                    <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-sm)', background: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                      {catInfo?.icon}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{e.description}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        {catInfo?.label} · {new Date(e.date).toLocaleDateString('it-IT')}
+                        {e.paidBy && ` · ${e.paidBy}`}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary-light)', flexShrink: 0 }}>
+                      {formatCurrency(e.amount)}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="modal-actions" style={{ marginTop: 16 }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setExclusionFor(null)}>Annulla</button>
+              <button type="button" className="btn btn-primary" onClick={saveExclusion}>💾 Salva</button>
+            </div>
+          </div>
         </div>
       )}
 

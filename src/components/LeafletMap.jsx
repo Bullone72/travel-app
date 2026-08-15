@@ -92,7 +92,7 @@ export async function getRouteDistance(start, end, transportMode = 'car') {
     const profile = transportMode === 'foot' || transportMode === 'a piedi' || transportMode === 'bicicletta'
       ? (transportMode === 'bicicletta' ? 'bike' : 'foot')
       : 'driving';
-    const url = `https://router.project-osrm.org/route/v1/${profile}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&alternatives=true`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('Routing failed');
     const data = await response.json();
@@ -109,6 +109,31 @@ export async function getRouteDistance(start, end, transportMode = 'car') {
   } catch (err) {
     console.error('OSRM routing error:', err);
     return null;
+  }
+}
+
+export async function getRouteAlternatives(points, transportMode = 'car') {
+  try {
+    if (!points || points.length < 2) return [];
+    const profile = transportMode === 'foot' || transportMode === 'a piedi' || transportMode === 'bicicletta'
+      ? (transportMode === 'bicicletta' ? 'bike' : 'foot')
+      : 'driving';
+    const coords = points.map(p => `${p.lng},${p.lat}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&alternatives=true`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Routing failed');
+    const data = await response.json();
+    if (data.routes && data.routes.length > 0) {
+      return data.routes.slice(0, 3).map(route => ({
+        distanceKm: route.distance / 1000,
+        durationMin: route.duration / 60,
+        coordinates: route.geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] })),
+      }));
+    }
+    return [];
+  } catch (err) {
+    console.error('OSRM routing error:', err);
+    return [];
   }
 }
 

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { ITINERARY_TYPES, calculateTotalKm, formatDuration } from '../utils/helpers';
+import { ITINERARY_TYPES, calculateTotalKm, formatDuration, formatKm } from '../utils/helpers';
 import PlaceSearch from '../components/PlaceSearch';
 import {
   createMap, addMarker, addRoutePolyline, addRouteSegment, fitMapToPoints, clearMarkers,
-  geocodeNominatim, getRouteDistance, openInOsm, DAY_COLORS,
+  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInOsm, DAY_COLORS,
 } from '../components/LeafletMap';
 
 export default function MapPage() {
@@ -21,6 +21,8 @@ export default function MapPage() {
   const [searchLocation, setSearchLocation] = useState(null);
   const [searchPoints, setSearchPoints] = useState([]);
   const [detecting, setDetecting] = useState(false);
+  const [altRoutes, setAltRoutes] = useState([]);
+  const [selectedAlt, setSelectedAlt] = useState(0);
 
   useEffect(() => {
     loadTripData(id);
@@ -117,16 +119,45 @@ export default function MapPage() {
 
   useEffect(() => {
     if (mapInstance.current) renderMap();
-  }, [activeDay, viewMode, tripItems, searchPoints]);
+  }, [activeDay, viewMode, tripItems, searchPoints, selectedAlt, altRoutes]);
 
   useEffect(() => {
     if (viewMode === 'itinerary') {
       calculateRouteDistance();
+      fetchAlternatives();
     } else {
       setRouteKm(null);
       setRouteDuration(null);
+      setAltRoutes([]);
+      setSelectedAlt(0);
     }
   }, [viewMode, activeDay]);
+
+  async function getDayRoutePoints() {
+    const ordered = [...dayItems].sort(sortByTime);
+    const pts = [];
+    for (const item of ordered) {
+      const itemPts = getRoutePointsForItem(item);
+      for (const p of itemPts) {
+        const last = pts[pts.length - 1];
+        if (!last || last.lat !== p.lat || last.lng !== p.lng) pts.push(p);
+      }
+    }
+    return pts;
+  }
+
+  async function fetchAlternatives() {
+    const pts = await getDayRoutePoints();
+    if (pts.length < 2) {
+      setAltRoutes([]);
+      setSelectedAlt(0);
+      return;
+    }
+    const firstMode = dayItems.find(i => i.transportMode)?.transportMode || 'auto';
+    const routes = await getRouteAlternatives(pts, firstMode);
+    setAltRoutes(routes);
+    setSelectedAlt(0);
+  }
 
   async function renderMap() {
     const map = mapInstance.current;
@@ -146,21 +177,27 @@ export default function MapPage() {
       const ordered = [...dayItems].sort(sortByTime);
       let allCoords = [];
       let colorIdx = 0;
-      for (const item of ordered) {
-        const pts = getRoutePointsForItem(item);
-        if (pts.length >= 2) {
-          for (let i = 0; i < pts.length - 1; i++) {
-            const seg = await getRouteDistance(pts[i], pts[i + 1], item.transportMode);
-            if (seg && seg.coordinates) {
-              addRouteSegment(map, seg.coordinates, DAY_COLORS[activeDay % DAY_COLORS.length]);
-              allCoords = allCoords.concat(seg.coordinates);
+
+      if (altRoutes.length > 0 && altRoutes[selectedAlt]) {
+        addRouteSegment(map, altRoutes[selectedAlt].coordinates, DAY_COLORS[activeDay % DAY_COLORS.length]);
+        allCoords = allCoords.concat(altRoutes[selectedAlt].coordinates);
+      } else {
+        for (const item of ordered) {
+          const pts = getRoutePointsForItem(item);
+          if (pts.length >= 2) {
+            for (let i = 0; i < pts.length - 1; i++) {
+              const seg = await getRouteDistance(pts[i], pts[i + 1], item.transportMode);
+              if (seg && seg.coordinates) {
+                addRouteSegment(map, seg.coordinates, DAY_COLORS[activeDay % DAY_COLORS.length]);
+                allCoords = allCoords.concat(seg.coordinates);
+              }
             }
           }
+          if (pts.length === 0 && item.lat && item.lng) {
+            allCoords.push({ lat: item.lat, lng: item.lng });
+          }
+          colorIdx++;
         }
-        if (pts.length === 0 && item.lat && item.lng) {
-          allCoords.push({ lat: item.lat, lng: item.lng });
-        }
-        colorIdx++;
       }
       if (allCoords.length >= 2) {
         const flat = allCoords.map(c => ({ lat: c.lat, lng: c.lng }));
@@ -213,6 +250,11 @@ export default function MapPage() {
   }
 
   async function calculateRouteDistance() {
+    if (altRoutes.length > 0 && altRoutes[selectedAlt]) {
+      setRouteKm(Math.round(altRoutes[selectedAlt].distanceKm * 10) / 10);
+      setRouteDuration(Math.round(altRoutes[selectedAlt].durationMin));
+      return;
+    }
     const ordered = [...dayItems].sort(sortByTime);
     let segments = [];
     for (const item of ordered) {
@@ -316,6 +358,25 @@ export default function MapPage() {
           </button>
         )}
       </div>
+
+      {altRoutes.length > 1 && (
+        <div className="route-options">
+          {altRoutes.map((r, i) => (
+            <button
+              key={i}
+              className={`route-option ${selectedAlt === i ? 'active' : ''}`}
+              onClick={() => { setSelectedAlt(i); }}
+            >
+              Percorso {i + 1} · {formatKm(r.distanceKm)} km · {formatDuration(Math.round(r.durationMin))}
+            </button>
+          ))}
+        </div>
+      )}
+      {altRoutes.length === 1 && (
+        <div className="route-options">
+          <span className="route-option active">Unico percorso · {formatKm(altRoutes[0].distanceKm)} km · {formatDuration(Math.round(altRoutes[0].durationMin))}</span>
+        </div>
+      )}
 
       <div className="day-tabs">
         {Array.from({ length: days }, (_, i) => i + 1).map(day => (

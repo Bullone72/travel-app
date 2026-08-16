@@ -4,7 +4,7 @@ import { getSetting, saveSetting } from '../services/database';
 import { getNcAutoSync, getNcConfig, saveNcConfig, setNcAutoSync } from '../services/ncSync';
 
 export default function SettingsPage() {
-  const { exportAllTrips, importTrips, loadTrips, triggerAutoBackup, syncNow, testNcConnection } = useApp();
+  const { exportAllTrips, importTrips, loadTrips, triggerAutoBackup, syncNow, testNcConnection, showNotification } = useApp();
   const [openrouterKey, setOpenrouterKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [autoBackup, setAutoBackup] = useState(false);
@@ -142,6 +142,29 @@ export default function SettingsPage() {
       setNcMsg(res.ok ? '✅ Dati sincronizzati con GitHub' : '❌ ' + res.error);
     } finally {
       setNcBusy(false);
+    }
+  }
+
+  const APP_URL = 'https://travel-app-tau-ashen.vercel.app';
+
+  async function handleShare() {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'TravelMate',
+          text: 'TravelMate: la tua app per gestire viaggi, spese e programmi',
+          url: APP_URL,
+        });
+        return;
+      } catch (e) {
+        if (e?.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(APP_URL);
+      showNotification('Link copiato negli appunti!');
+    } catch {
+      showNotification('Link: ' + APP_URL, 'error');
     }
   }
 
@@ -324,6 +347,11 @@ export default function SettingsPage() {
           <p style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             Il backup manuale (Esporta tutto) resta disponibile per salvare una copia su file.
           </p>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <button className="btn btn-primary" onClick={handleShare}>
+            📤 Condividi app
+          </button>
         </div>
       </div>
     </div>

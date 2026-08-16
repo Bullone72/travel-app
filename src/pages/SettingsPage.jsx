@@ -12,10 +12,7 @@ export default function SettingsPage() {
   const [keyTestMsg, setKeyTestMsg] = useState('');
   const [testing, setTesting] = useState(false);
 
-  const [ncServer, setNcServer] = useState('');
-  const [ncFolder, setNcFolder] = useState('TravelMate');
-  const [ncUser, setNcUser] = useState('');
-  const [ncPassword, setNcPassword] = useState('');
+  const [ghToken, setGhToken] = useState('');
   const [showNcPw, setShowNcPw] = useState(false);
   const [ncAuto, setNcAuto] = useState(false);
   const [ncMsg, setNcMsg] = useState('');
@@ -29,10 +26,7 @@ export default function SettingsPage() {
     getSetting('openrouter_api_key').then(v => v && setOpenrouterKey(v));
     getSetting('auto_backup').then(v => setAutoBackup(!!v));
     getNcConfig().then(cfg => {
-      setNcServer(cfg.server || '');
-      setNcFolder(cfg.folder || 'TravelMate');
-      setNcUser(cfg.username || '');
-      setNcPassword(cfg.password || '');
+      setGhToken(cfg.token || '');
     });
     getNcAutoSync().then(v => setNcAuto(!!v));
   }, []);
@@ -119,12 +113,7 @@ export default function SettingsPage() {
   }
 
   async function saveNc() {
-    await saveNcConfig({
-      server: cleanKey(ncServer),
-      username: cleanKey(ncUser),
-      password: ncPassword,
-      folder: cleanKey(ncFolder) || 'TravelMate',
-    });
+    await saveNcConfig({ token: cleanKey(ghToken) });
     await setNcAutoSync(ncAuto);
     setNcMsg('✅ Configurazione salvata!');
     setTimeout(() => setNcMsg(''), 2000);
@@ -132,16 +121,11 @@ export default function SettingsPage() {
 
   async function handleNcTest() {
     setNcBusy(true);
-    setNcMsg('⏳ Test in corso...');
+    setNcMsg('⏳ Verifica del token in corso...');
     try {
-      await saveNcConfig({
-        server: cleanKey(ncServer),
-        username: cleanKey(ncUser),
-        password: ncPassword,
-        folder: cleanKey(ncFolder) || 'TravelMate',
-      });
+      await saveNcConfig({ token: cleanKey(ghToken) });
       const res = await testNcConnection();
-      setNcMsg(res.ok ? '✅ Connessione al NAS riuscita' : '❌ ' + res.error);
+      setNcMsg(res.ok ? '✅ Token valido: connessione a GitHub riuscita' : '❌ ' + res.error);
     } catch (e) {
       setNcMsg('❌ ' + e.message);
     } finally {
@@ -153,14 +137,9 @@ export default function SettingsPage() {
     setNcBusy(true);
     setNcMsg('⏳ Sincronizzazione in corso...');
     try {
-      await saveNcConfig({
-        server: cleanKey(ncServer),
-        username: cleanKey(ncUser),
-        password: ncPassword,
-        folder: cleanKey(ncFolder) || 'TravelMate',
-      });
+      await saveNcConfig({ token: cleanKey(ghToken) });
       const res = await syncNow();
-      setNcMsg(res.ok ? '✅ Dati sincronizzati con il NAS' : '❌ ' + res.error);
+      setNcMsg(res.ok ? '✅ Dati sincronizzati con GitHub' : '❌ ' + res.error);
     } finally {
       setNcBusy(false);
     }
@@ -271,54 +250,28 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
-        <div className="card-title" style={{ marginBottom: 12 }}>☁️ Sincronizzazione multi-dispositivo (NAS)</div>
+        <div className="card-title" style={{ marginBottom: 12 }}>☁️ Sincronizzazione multi-dispositivo</div>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 12 }}>
-          Sincronizza i dati tra PC e telefono salvando il backup sul tuo NAS via WebDAV.
-          Funziona da qualsiasi PC e dal telefono, anche in 4G.
+          Sincronizza i dati tra PC e telefono salvando il backup in un <strong>Gist segreto</strong> sul tuo account GitHub.
+          Funziona da qualsiasi PC e dal telefono, anche in 4G, senza aprire porte.
         </p>
 
         <div className="form-group">
-          <label className="form-label">Indirizzo del NAS (con porta WebDAV)</label>
-          <input
-            className="form-input"
-            placeholder="https://tua.myqnapcloud.com:8081"
-            value={ncServer}
-            onChange={e => setNcServer(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Cartella condivisa</label>
-          <input
-            className="form-input"
-            placeholder="TravelMate"
-            value={ncFolder}
-            onChange={e => setNcFolder(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Utente QNAP</label>
-          <input
-            className="form-input"
-            placeholder="admin"
-            value={ncUser}
-            onChange={e => setNcUser(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Password QNAP</label>
+          <label className="form-label">GitHub Token (scope "gist")</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               className="form-input"
               type={showNcPw ? 'text' : 'password'}
-              value={ncPassword}
-              onChange={e => setNcPassword(e.target.value)}
+              placeholder="github_pat_..."
+              value={ghToken}
+              onChange={e => setGhToken(e.target.value)}
               style={{ flex: 1 }}
             />
             <button
               className="btn btn-secondary"
               type="button"
               onClick={() => setShowNcPw(!showNcPw)}
-              title={showNcPw ? 'Nascondi password' : 'Mostra password'}
+              title={showNcPw ? 'Nascondi token' : 'Mostra token'}
               style={{ whiteSpace: 'nowrap', minWidth: 'auto' }}
             >
               {showNcPw ? '🙈' : '👁️'}
@@ -328,7 +281,7 @@ export default function SettingsPage() {
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
           <button className="btn btn-secondary" onClick={handleNcTest} disabled={ncBusy}>
-            🔗 Testa connessione
+            🔗 Collega e verifica
           </button>
           <button className="btn btn-secondary" onClick={saveNc} disabled={ncBusy}>
             💾 Salva configurazione
@@ -346,12 +299,13 @@ export default function SettingsPage() {
         </div>
 
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 8 }}>
-          <p style={{ marginBottom: 4 }}><strong>Come preparare il NAS (una volta sola):</strong></p>
-          <p>1. App Center → installa <strong>WebDAV Server</strong></p>
-          <p>2. Apri WebDAV Server → abilitalo e appunta la <strong>porta HTTPS</strong> (di solito 8081)</p>
-          <p>3. Crea una cartella condivisa (es. <strong>TravelMate</strong>) e abilitala nel WebDAV Server</p>
-          <p>4. Verifica che la porta sia aperta verso l'esterno (myQNAPcloud / router) e che l'utente QNAP abbia accesso alla cartella</p>
-          <p>5. Inserisci qui sopra <code>https://tua.myqnapcloud.com:PORTA</code> e premi "Testa connessione"</p>
+          <p style={{ marginBottom: 4 }}><strong>Come creare il token (una volta sola):</strong></p>
+          <p>1. Vai su <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-light)' }}>github.com/settings/tokens</a></p>
+          <p>2. <strong>Generate new token</strong> → <strong>Generate new token (classic)</strong></p>
+          <p>3. In "Note" scrivi <em>TravelMate</em>, scadenza a piacere</p>
+          <p>4. Seleziona lo scope <strong>gist</strong> (sotto "write:gist")</p>
+          <p>5. <strong>Generate token</strong> → copia il token e incollalo qui sopra</p>
+          <p>6. Premi "Collega e verifica", poi "Sincronizza ora" e attiva la sincronizzazione automatica</p>
         </div>
 
         {ncMsg && (
@@ -366,9 +320,9 @@ export default function SettingsPage() {
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
           <p><strong>TravelMate</strong> - Gestione Viaggi v1.1</p>
           <p>Tutti i dati sono salvati localmente nel browser (IndexedDB).</p>
-          <p>Usa il backup per sincronizzare i dispositivi con Resilio Sync.</p>
+          <p>Con la sincronizzazione attiva, i dati vengono salvati anche in un Gist segreto su GitHub e ripristinati su ogni dispositivo.</p>
           <p style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Per Resilio Sync: esporta il backup, salva nella cartella condivisa, e importa sull'altro dispositivo.
+            Il backup manuale (Esporta tutto) resta disponibile per salvare una copia su file.
           </p>
         </div>
       </div>

@@ -1,33 +1,23 @@
 import { getSetting, saveSetting } from './database';
 
 const KEYS = {
-  server: 'nc_server',
-  user: 'nc_user',
-  password: 'nc_password',
-  folder: 'nc_folder',
+  token: 'gh_token',
+  gistId: 'gh_gist_id',
   auto: 'nc_auto',
   lastSync: 'nc_last_sync',
 };
 
 export const SYNC_FILE = 'travelmate-sync.json';
 
+const GH_BASE = 'https://api.github.com';
+
 export async function getNcConfig() {
-  const [server, username, password, folder] = await Promise.all([
-    getSetting(KEYS.server),
-    getSetting(KEYS.user),
-    getSetting(KEYS.password),
-    getSetting(KEYS.folder),
-  ]);
-  return { server, username, password, folder: folder || 'TravelMate' };
+  const [token, gistId] = await Promise.all([getSetting(KEYS.token), getSetting(KEYS.gistId)]);
+  return { token, gistId };
 }
 
-export async function saveNcConfig({ server, username, password, folder }) {
-  await Promise.all([
-    saveSetting(KEYS.server, server),
-    saveSetting(KEYS.user, username),
-    saveSetting(KEYS.password, password),
-    saveSetting(KEYS.folder, folder || 'TravelMate'),
-  ]);
+export async function saveNcConfig({ token }) {
+  await saveSetting(KEYS.token, token);
 }
 
 export async function getNcAutoSync() {
@@ -43,46 +33,76 @@ export async function getNcLastSync() {
 }
 
 export function isNcConfigured(cfg) {
-  return !!(cfg && cfg.server && cfg.username && cfg.password);
+  return !!(cfg && cfg.token);
 }
 
-async function callProxy(action, payload) {
-  const res = await fetch('/api/sync', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...payload }),
+async function gh(url, options = {}) {
+  const cfg = await getNcConfig();
+  if (!cfg.token) throw new Error('Inserisci prima il token GitHub nelle Impostazioni');
+  const res = await fetch(GH_BASE + url, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${cfg.token}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
   });
-  let json;
-  try {
-    json = await res.json();
-  } catch {
-    throw new Error(`Risposta non valida dal server (HTTP ${res.status})`);
+  if (!res.ok) {
+    let msg = `Errore ${res.status}`;
+    try {
+      const e = await res.json();
+      if (e?.message) msg = e.message;
+    } catch {
+      /* ignore */
+    }
+    if (res.status === 401 || res.status === 403) {
+      msg = 'Token non valido o senza permessi (401/403). Rigenera il token con lo scope "gist".';
+    }
+    throw new Error(msg);
   }
-  if (!res.ok || !json?.ok) {
-    throw new Error(json?.error || `Errore ${res.status}`);
-  }
-  return json;
+  return res.status === 204 ? null : res.json();
 }
 
 export async function testConnection() {
-  const cfg = await getNcConfig();
-  if (!isNcConfigured(cfg)) throw new Error('Configura prima indirizzo, utente e password.');
-  await callProxy('test', cfg);
-}
-
-export async function pushBackup(data) {
-  const cfg = await getNcConfig();
-  await callProxy('put', { ...cfg, filename: SYNC_FILE, data: JSON.stringify(data) });
-  await saveSetting(KEYS.lastSync, data.exportedAt || new Date().toISOString());
+  await gh('/user');
 }
 
 export async function pullBackup() {
   const cfg = await getNcConfig();
-  const res = await callProxy('get', { ...cfg, filename: SYNC_FILE });
-  if (!res.exists) return null;
+  if (!cfg.token || !cfg.gistId) return null;
+  const gist = await gh(`/gists/${encodeURIComponent(cfg.gistId)}`);
+  const file = gist?.files?.[SYNC_FILE];
+  if (!file) return null;
   try {
-    return JSON.parse(res.data);
+    return JSON.parse(file.content);
   } catch {
     return null;
   }
+}
+
+export async function pushBackup(data) {
+  const cfg = await getNcConfig();
+  if (!cfg.token) throw new Error('Inserisci prima il token GitHub nelle Impostazioni');
+  const content = JSON.stringify(data);
+  let gistId = cfg.gistId;
+  if (!gistId) {
+    const created = await gh('/gists', {
+      method: 'POST',
+      body: JSON.stringify({
+        description: 'TravelMate - backup sincronizzato',
+        public: false,
+        files: { [SYNC_FILE]: { content } },
+      }),
+    });
+    gistId = created.id;
+    await saveSetting(KEYS.gistId, gistId);
+  } else {
+    await gh(`/gists/${encodeURIComponent(gistId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ files: { [SYNC_FILE]: { content } } }),
+    });
+  }
+  await saveSetting(KEYS.lastSync, data.exportedAt || new Date().toISOString());
 }

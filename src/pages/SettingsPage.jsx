@@ -1,15 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { getSetting, saveSetting } from '../services/database';
+import { getNcAutoSync, getNcConfig, saveNcConfig, setNcAutoSync } from '../services/ncSync';
 
 export default function SettingsPage() {
-  const { exportAllTrips, importTrips, loadTrips, triggerAutoBackup } = useApp();
+  const { exportAllTrips, importTrips, loadTrips, triggerAutoBackup, syncNow, testNcConnection } = useApp();
   const [openrouterKey, setOpenrouterKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [autoBackup, setAutoBackup] = useState(false);
   const [importMsg, setImportMsg] = useState('');
   const [keyTestMsg, setKeyTestMsg] = useState('');
   const [testing, setTesting] = useState(false);
+
+  const [ncServer, setNcServer] = useState('');
+  const [ncFolder, setNcFolder] = useState('TravelMate');
+  const [ncUser, setNcUser] = useState('');
+  const [ncPassword, setNcPassword] = useState('');
+  const [showNcPw, setShowNcPw] = useState(false);
+  const [ncAuto, setNcAuto] = useState(false);
+  const [ncMsg, setNcMsg] = useState('');
+  const [ncBusy, setNcBusy] = useState(false);
 
   function cleanKey(value) {
     return value.replace(/\s+/g, '').trim();
@@ -18,6 +28,13 @@ export default function SettingsPage() {
   useEffect(() => {
     getSetting('openrouter_api_key').then(v => v && setOpenrouterKey(v));
     getSetting('auto_backup').then(v => setAutoBackup(!!v));
+    getNcConfig().then(cfg => {
+      setNcServer(cfg.server || '');
+      setNcFolder(cfg.folder || 'TravelMate');
+      setNcUser(cfg.username || '');
+      setNcPassword(cfg.password || '');
+    });
+    getNcAutoSync().then(v => setNcAuto(!!v));
   }, []);
 
   async function saveKeys() {
@@ -99,6 +116,54 @@ export default function SettingsPage() {
       }
     };
     reader.readAsText(file);
+  }
+
+  async function saveNc() {
+    await saveNcConfig({
+      server: cleanKey(ncServer),
+      username: cleanKey(ncUser),
+      password: ncPassword,
+      folder: cleanKey(ncFolder) || 'TravelMate',
+    });
+    await setNcAutoSync(ncAuto);
+    setNcMsg('✅ Configurazione salvata!');
+    setTimeout(() => setNcMsg(''), 2000);
+  }
+
+  async function handleNcTest() {
+    setNcBusy(true);
+    setNcMsg('⏳ Test in corso...');
+    try {
+      await saveNcConfig({
+        server: cleanKey(ncServer),
+        username: cleanKey(ncUser),
+        password: ncPassword,
+        folder: cleanKey(ncFolder) || 'TravelMate',
+      });
+      const res = await testNcConnection();
+      setNcMsg(res.ok ? '✅ Connessione al NAS riuscita' : '❌ ' + res.error);
+    } catch (e) {
+      setNcMsg('❌ ' + e.message);
+    } finally {
+      setNcBusy(false);
+    }
+  }
+
+  async function handleNcSync() {
+    setNcBusy(true);
+    setNcMsg('⏳ Sincronizzazione in corso...');
+    try {
+      await saveNcConfig({
+        server: cleanKey(ncServer),
+        username: cleanKey(ncUser),
+        password: ncPassword,
+        folder: cleanKey(ncFolder) || 'TravelMate',
+      });
+      const res = await syncNow();
+      setNcMsg(res.ok ? '✅ Dati sincronizzati con il NAS' : '❌ ' + res.error);
+    } finally {
+      setNcBusy(false);
+    }
   }
 
   return (
@@ -201,6 +266,97 @@ export default function SettingsPage() {
         {importMsg && (
           <p style={{ marginTop: 8, fontSize: '0.85rem', color: importMsg.includes('❌') ? 'var(--danger)' : 'var(--success)' }}>
             {importMsg}
+          </p>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="card-title" style={{ marginBottom: 12 }}>☁️ Sincronizzazione multi-dispositivo (NAS)</div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 12 }}>
+          Sincronizza i dati tra PC e telefono salvando il backup sul tuo NAS via WebDAV.
+          Funziona da qualsiasi PC e dal telefono, anche in 4G.
+        </p>
+
+        <div className="form-group">
+          <label className="form-label">Indirizzo del NAS (con porta WebDAV)</label>
+          <input
+            className="form-input"
+            placeholder="https://tua.myqnapcloud.com:8081"
+            value={ncServer}
+            onChange={e => setNcServer(e.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Cartella condivisa</label>
+          <input
+            className="form-input"
+            placeholder="TravelMate"
+            value={ncFolder}
+            onChange={e => setNcFolder(e.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Utente QNAP</label>
+          <input
+            className="form-input"
+            placeholder="admin"
+            value={ncUser}
+            onChange={e => setNcUser(e.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Password QNAP</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              className="form-input"
+              type={showNcPw ? 'text' : 'password'}
+              value={ncPassword}
+              onChange={e => setNcPassword(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => setShowNcPw(!showNcPw)}
+              title={showNcPw ? 'Nascondi password' : 'Mostra password'}
+              style={{ whiteSpace: 'nowrap', minWidth: 'auto' }}
+            >
+              {showNcPw ? '🙈' : '👁️'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button className="btn btn-secondary" onClick={handleNcTest} disabled={ncBusy}>
+            🔗 Testa connessione
+          </button>
+          <button className="btn btn-secondary" onClick={saveNc} disabled={ncBusy}>
+            💾 Salva configurazione
+          </button>
+          <button className="btn btn-primary" onClick={handleNcSync} disabled={ncBusy}>
+            ☁️ Sincronizza ora
+          </button>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: 8 }}>
+          <label className="checkbox-group" onClick={() => setNcAuto(!ncAuto)}>
+            <input type="checkbox" checked={ncAuto} readOnly />
+            <span style={{ fontSize: '0.85rem' }}>🔄 Sincronizzazione automatica (dopo ogni modifica e all'avvio)</span>
+          </label>
+        </div>
+
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 8 }}>
+          <p style={{ marginBottom: 4 }}><strong>Come preparare il NAS (una volta sola):</strong></p>
+          <p>1. App Center → installa <strong>WebDAV Server</strong></p>
+          <p>2. Apri WebDAV Server → abilitalo e appunta la <strong>porta HTTPS</strong> (di solito 8081)</p>
+          <p>3. Crea una cartella condivisa (es. <strong>TravelMate</strong>) e abilitala nel WebDAV Server</p>
+          <p>4. Verifica che la porta sia aperta verso l'esterno (myQNAPcloud / router) e che l'utente QNAP abbia accesso alla cartella</p>
+          <p>5. Inserisci qui sopra <code>https://tua.myqnapcloud.com:PORTA</code> e premi "Testa connessione"</p>
+        </div>
+
+        {ncMsg && (
+          <p style={{ marginTop: 8, fontSize: '0.85rem', color: ncMsg.startsWith('✅') ? 'var(--success)' : ncMsg.startsWith('❌') ? 'var(--danger)' : 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+            {ncMsg}
           </p>
         )}
       </div>

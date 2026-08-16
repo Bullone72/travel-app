@@ -1,5 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as db from '../services/database';
+import {
+  getNcAutoSync, getNcConfig, getNcLastSync, isNcConfigured,
+  pushBackup, pullBackup, testConnection,
+} from '../services/ncSync';
 import { createTrip, createExpense, createWalletItem, createItineraryItem, createParticipant } from '../utils/helpers';
 
 const AppContext = createContext(null);
@@ -23,6 +27,20 @@ export function AppProvider({ children }) {
       loadTripData(currentTrip.id);
     }
   }, [currentTrip?.id]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!(await getNcAutoSync())) return;
+        const cfg = await getNcConfig();
+        if (!isNcConfigured(cfg)) return;
+        await syncNow({ silent: true });
+      } catch (e) {
+        console.error('Initial sync failed:', e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const showNotification = useCallback((message, type = 'success') => {
     setNotification({ message, type });
@@ -95,6 +113,7 @@ export function AppProvider({ children }) {
     setExpenses(exp);
     showNotification('Spesa aggiunta!');
     maybeAutoBackup();
+    maybeAutoSync();
     return expense;
   }
 
@@ -105,6 +124,7 @@ export function AppProvider({ children }) {
       setExpenses(exp);
     }
     maybeAutoBackup();
+    maybeAutoSync();
   }
 
   async function removeExpense(id) {
@@ -115,6 +135,7 @@ export function AppProvider({ children }) {
     }
     showNotification('Spesa eliminata');
     maybeAutoBackup();
+    maybeAutoSync();
   }
 
   async function addWalletItem(data) {
@@ -125,6 +146,7 @@ export function AppProvider({ children }) {
     setWalletItems(wal);
     showNotification('Documento salvato nel wallet!');
     maybeAutoBackup();
+    maybeAutoSync();
     return item;
   }
 
@@ -136,6 +158,7 @@ export function AppProvider({ children }) {
     }
     showNotification('Documento rimosso');
     maybeAutoBackup();
+    maybeAutoSync();
   }
 
   async function addItineraryItem(data) {
@@ -146,6 +169,7 @@ export function AppProvider({ children }) {
     setItinerary(itin);
     showNotification('Attività aggiunta al programma!');
     maybeAutoBackup();
+    maybeAutoSync();
     return item;
   }
 
@@ -156,6 +180,7 @@ export function AppProvider({ children }) {
       setItinerary(itin);
     }
     maybeAutoBackup();
+    maybeAutoSync();
   }
 
   async function removeItineraryItem(id) {
@@ -165,6 +190,7 @@ export function AppProvider({ children }) {
       setItinerary(itin);
     }
     maybeAutoBackup();
+    maybeAutoSync();
   }
 
   async function addParticipant(data) {
@@ -175,6 +201,7 @@ export function AppProvider({ children }) {
     setParticipants(part);
     showNotification('Partecipante aggiunto!');
     maybeAutoBackup();
+    maybeAutoSync();
     return participant;
   }
 
@@ -185,6 +212,7 @@ export function AppProvider({ children }) {
       setParticipants(part);
     }
     maybeAutoBackup();
+    maybeAutoSync();
   }
 
   async function removeParticipant(id) {
@@ -194,6 +222,7 @@ export function AppProvider({ children }) {
       setParticipants(part);
     }
     maybeAutoBackup();
+    maybeAutoSync();
   }
 
   async function exportTrip(tripId) {
@@ -235,6 +264,57 @@ export function AppProvider({ children }) {
     }
   }
 
+  async function syncNow({ silent = false } = {}) {
+    try {
+      const cfg = await getNcConfig();
+      if (!isNcConfigured(cfg)) {
+        throw new Error('Configura la sincronizzazione NAS nelle Impostazioni');
+      }
+      const lastSync = await getNcLastSync();
+      const remote = await pullBackup();
+      if (remote && remote.exportedAt && (!lastSync || remote.exportedAt > lastSync)) {
+        await db.importAllData(remote);
+        await loadTrips();
+        if (currentTrip?.id) await loadTripData(currentTrip.id);
+      }
+      const local = await db.exportAllData();
+      await pushBackup(local);
+      if (!silent) showNotification('Sincronizzato con il NAS');
+      return { ok: true };
+    } catch (e) {
+      console.error('Sync failed:', e);
+      if (!silent) showNotification('Sync fallita: ' + e.message, 'error');
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async function testNcConnection() {
+    try {
+      await testConnection();
+      showNotification('Connessione al NAS riuscita');
+      return { ok: true };
+    } catch (e) {
+      showNotification('Test fallito: ' + e.message, 'error');
+      return { ok: false, error: e.message };
+    }
+  }
+
+  const lastAutoSync = useRef(0);
+  async function maybeAutoSync() {
+    try {
+      if (!(await getNcAutoSync())) return;
+      const cfg = await getNcConfig();
+      if (!isNcConfigured(cfg)) return;
+      const now = Date.now();
+      if (now - lastAutoSync.current < 30000) return;
+      lastAutoSync.current = now;
+      const local = await db.exportAllData();
+      await pushBackup(local);
+    } catch (e) {
+      console.error('Auto sync failed:', e);
+    }
+  }
+
   async function importTrips(data) {
     await db.importAllData(data);
     await loadTrips();
@@ -254,7 +334,7 @@ export function AppProvider({ children }) {
     addItineraryItem, updateItineraryItem, removeItineraryItem,
     addParticipant, updateParticipant, removeParticipant,
     exportTrip, exportAllTrips, importTrips, showNotification,
-    loadTrips, loadTripData, triggerAutoBackup,
+    loadTrips, loadTripData, triggerAutoBackup, syncNow, testNcConnection,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

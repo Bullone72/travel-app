@@ -69,10 +69,20 @@ export async function testConnection() {
   await gh('/user');
 }
 
+async function findGist() {
+  const cfg = await getNcConfig();
+  if (cfg.gistId) return cfg.gistId;
+  const gists = await gh('/gists?per_page=100');
+  const found = gists?.find((g) => g?.files?.[SYNC_FILE]);
+  return found?.id || null;
+}
+
 export async function pullBackup() {
   const cfg = await getNcConfig();
-  if (!cfg.token || !cfg.gistId) return null;
-  const gist = await gh(`/gists/${encodeURIComponent(cfg.gistId)}`);
+  if (!cfg.token) return null;
+  const gistId = await findGist();
+  if (!gistId) return null;
+  const gist = await gh(`/gists/${encodeURIComponent(gistId)}`);
   const file = gist?.files?.[SYNC_FILE];
   if (!file) return null;
   try {
@@ -86,7 +96,7 @@ export async function pushBackup(data) {
   const cfg = await getNcConfig();
   if (!cfg.token) throw new Error('Inserisci prima il token GitHub nelle Impostazioni');
   const content = JSON.stringify(data);
-  let gistId = cfg.gistId;
+  let gistId = await findGist();
   if (!gistId) {
     const created = await gh('/gists', {
       method: 'POST',
@@ -99,6 +109,7 @@ export async function pushBackup(data) {
     gistId = created.id;
     await saveSetting(KEYS.gistId, gistId);
   } else {
+    if (!cfg.gistId) await saveSetting(KEYS.gistId, gistId);
     await gh(`/gists/${encodeURIComponent(gistId)}`, {
       method: 'PATCH',
       body: JSON.stringify({ files: { [SYNC_FILE]: { content } } }),

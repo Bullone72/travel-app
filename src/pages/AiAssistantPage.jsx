@@ -149,10 +149,6 @@ export default function AiAssistantPage() {
       alert('Posizione non rilevata. Controlla che GPS e permessi di localizzazione siano attivi, oppure usa ✏️ Manuale.');
       return;
     }
-    if (loc.accuracy && loc.accuracy > 1000) {
-      alert(`Posizione troppo imprecisa (${Math.round(loc.accuracy)} m, probabilmente stimata via internet → ${loc.name}). Usa ✏️ Manuale per scegliere il tuo luogo esatto.`);
-      return;
-    }
     const saved = { name: loc.name, lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy };
     setManualLocation(saved);
     try {
@@ -163,7 +159,7 @@ export default function AiAssistantPage() {
   async function silentDetectLocation() {
     if (!('geolocation' in navigator)) return;
     const loc = await new Promise((resolve) => {
-      const timeout = setTimeout(() => resolve(null), 6000);
+      const timeout = setTimeout(() => resolve(null), 8000);
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           clearTimeout(timeout);
@@ -176,14 +172,14 @@ export default function AiAssistantPage() {
             const name = data?.display_name?.split(',')[0] || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
             resolve({ name, lat: latitude, lng: longitude, accuracy });
           } catch {
-            resolve(null);
+            resolve({ name: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, lat: latitude, lng: longitude, accuracy });
           }
         },
         () => { clearTimeout(timeout); resolve(null); },
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+        { enableHighAccuracy: false, timeout: 7000, maximumAge: 300000 }
       );
     });
-    if (loc && (!loc.accuracy || loc.accuracy <= 1000)) {
+    if (loc) {
       const saved = { name: loc.name, lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy };
       setManualLocation(saved);
       try {

@@ -142,13 +142,22 @@ export default function MapPage() {
   function getDaySegments() {
     const ordered = [...dayItems].sort(sortByTime);
     const segments = [];
+    let lastArrival = null;
+    let lastMode = null;
     for (const item of ordered) {
       const pts = getRoutePointsForItem(item);
       if (pts.length >= 2) {
         for (let i = 0; i < pts.length - 1; i++) {
           segments.push({ a: pts[i], b: pts[i + 1], mode: item.transportMode });
         }
+        lastArrival = pts[pts.length - 1];
+      } else if (pts.length === 1) {
+        if (lastArrival) {
+          segments.push({ a: lastArrival, b: pts[0], mode: lastMode || 'car' });
+        }
+        lastArrival = pts[0];
       }
+      lastMode = item.transportMode;
     }
     return segments;
   }
@@ -371,7 +380,6 @@ export default function MapPage() {
           {getDaySegments().map((seg, s) => {
             const alts = altRoutes[s] || [];
             const sel = selectedAlts[s] || 0;
-            if (alts.length <= 1) return null;
             return (
               <div key={s} style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -391,6 +399,9 @@ export default function MapPage() {
                       Percorso {i + 1} · {formatKm(r.distanceKm)} km · {formatDuration(Math.round(r.durationMin))}
                     </button>
                   ))}
+                  {alts.length <= 1 && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Solo un percorso disponibile per questo tratto</span>
+                  )}
                 </div>
               </div>
             );

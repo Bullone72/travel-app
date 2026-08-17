@@ -119,7 +119,7 @@ export async function getRouteAlternatives(points, transportMode = 'car') {
       ? (transportMode === 'bicicletta' ? 'bike' : 'foot')
       : 'driving';
     const coords = points.map(p => `${p.lng},${p.lat}`).join(';');
-    const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&alternatives=true`;
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&alternatives=true&number=3`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('Routing failed');
     const data = await response.json();

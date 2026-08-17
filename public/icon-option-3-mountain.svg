@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="sky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="60%" style="stop-color:#93c5fd"/>
+      <stop offset="100%" style="stop-color:#fde68a"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="url(#sky)"/>
+  <!-- sun -->
+  <circle cx="72" cy="30" r="14" fill="#fbbf24" opacity="0.9"/>
+  <circle cx="72" cy="30" r="10" fill="#fde68a" opacity="0.6"/>
+  <!-- mountain back -->
+  <polygon points="10,80 35,35 60,80" fill="#334155" opacity="0.6"/>
+  <!-- mountain front -->
+  <polygon points="30,80 55,30 80,80" fill="#1e293b" opacity="0.85"/>
+  <!-- snow cap -->
+  <polygon points="55,30 50,42 60,42" fill="#fff" opacity="0.8"/>
+  <!-- foreground -->
+  <rect x="0" y="72" width="100" height="28" rx="0" fill="#1e293b" opacity="0.3"/>
+  <!-- trees -->
+  <polygon points="15,72 18,62 21,72" fill="#166534" opacity="0.7"/>
+  <polygon points="78,72 81,64 84,72" fill="#166534" opacity="0.6"/>
+  <!-- bottom radius fill -->
+  <rect x="0" y="78" width="100" height="22" rx="0" fill="#1e293b" opacity="0.5"/>
+  <rect x="0" y="86" width="100" height="14" rx="0" fill="#1e293b" opacity="0.7"/>
+</svg>

@@ -55,6 +55,8 @@ export default function AiAssistantPage() {
     getSetting('manual_ai_location').then(v => {
       if (v) {
         try { setManualLocation(JSON.parse(v)); } catch {}
+      } else {
+        silentDetectLocation();
       }
     });
   }, []);
@@ -158,6 +160,38 @@ export default function AiAssistantPage() {
     } catch {}
   }
 
+  async function silentDetectLocation() {
+    if (!('geolocation' in navigator)) return;
+    const loc = await new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 6000);
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          clearTimeout(timeout);
+          const { latitude, longitude, accuracy } = pos.coords;
+          try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`;
+            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) return resolve(null);
+            const data = await res.json();
+            const name = data?.display_name?.split(',')[0] || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            resolve({ name, lat: latitude, lng: longitude, accuracy });
+          } catch {
+            resolve(null);
+          }
+        },
+        () => { clearTimeout(timeout); resolve(null); },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+      );
+    });
+    if (loc && (!loc.accuracy || loc.accuracy <= 1000)) {
+      const saved = { name: loc.name, lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy };
+      setManualLocation(saved);
+      try {
+        await saveSetting('manual_ai_location', JSON.stringify(saved));
+      } catch {}
+    }
+  }
+
   async function sendMessage() {
     if (!input.trim() || loading) return;
     const userMessage = input.trim();
@@ -183,7 +217,7 @@ export default function AiAssistantPage() {
       ? `\n\n📍 POSIZIONE ATTUALE DELL'UTENTE IN QUESTO MOMENTO: "${loc.name}" (lat ${loc.lat.toFixed(4)}, lng ${loc.lng.toFixed(4)}).\nL'utente si trova ORA in questo luogo. Per QUALSIASI consiglio su ristoranti, luoghi, attività o cose da vedere, usa SEMPRE questa posizione come riferimento. La destinazione del viaggio può essere diversa: IGNORALA completamente quando consigli luoghi o ristoranti, a meno che l'utente non chieda esplicitamente di quella.`
       : `\n\nL'utente NON ha condiviso la posizione attuale: in questo caso usa la destinazione del viaggio come posizione di riferimento per i consigli.`;
 
-    const systemPrompt = `Sei un assistente di viaggio esperto e amichevole. Fornisci consigli pratici e dettagliati su ristoranti, luoghi da vedere, attività, trasporti, alloggi e qualsiasi informazione utile per i viaggiatori. Rispondi in italiano. Sii conciso ma informativo. ${context} ${locationInstruction}\n\nREGOLA ASSOLUTA: non inventare MAI nomi di ristoranti, locali, vie o indirizzi. Non elencare luoghi di tua memoria. Dai solo consigli generali (tipi di cucina, zone, come scegliere, cosa aspettarsi) SENZA citare nomi o indirizzi specifici. Se l'utente chiede nomi concreti, consigliali di usare la pagina Mappa dell'app, dove può cercare locali reali verificati.`;
+    const systemPrompt = `IMPORTANTE: Rispondi SEMPRE e ESCLUSIVAMENTE in italiano. NON usare MAI l'inglese né altre lingue. Tutte le parole, le frasi e le spiegazioni DEVONO essere in italiano.\n\nSei un assistente di viaggio esperto e amichevole. Fornisci consigli pratici e dettagliati su ristoranti, luoghi da vedere, attività, trasporti, alloggi e qualsiasi informazione utile per i viaggiatori. Sii conciso ma informativo. ${context} ${locationInstruction}\n\nREGOLA ASSOLUTA: non inventare MAI nomi di ristoranti, locali, vie o indirizzi. Non elencare luoghi di tua memoria. Dai solo consigli generali (tipi di cucina, zone, come scegliere, cosa aspettarsi) SENZA citare nomi o indirizzi specifici. Se l'utente chiede nomi concreti, consigliali di usare la pagina Mappa dell'app, dove può cercare locali reali verificati.`;
 
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {

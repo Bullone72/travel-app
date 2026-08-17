@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e11d48"/>
+      <stop offset="100%" style="stop-color:#881337"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="url(#bg)"/>
+  <!-- grid lines (map) -->
+  <line x1="0" y1="25" x2="100" y2="25" stroke="#fff" stroke-width="0.6" opacity="0.12"/>
+  <line x1="0" y1="50" x2="100" y2="50" stroke="#fff" stroke-width="0.6" opacity="0.12"/>
+  <line x1="0" y1="75" x2="100" y2="75" stroke="#fff" stroke-width="0.6" opacity="0.12"/>
+  <line x1="25" y1="0" x2="25" y2="100" stroke="#fff" stroke-width="0.6" opacity="0.12"/>
+  <line x1="50" y1="0" x2="50" y2="100" stroke="#fff" stroke-width="0.6" opacity="0.12"/>
+  <line x1="75" y1="0" x2="75" y2="100" stroke="#fff" stroke-width="0.6" opacity="0.12"/>
+  <!-- road -->
+  <path d="M 15 80 Q 30 55 50 50 Q 70 45 85 25" fill="none" stroke="#fff" stroke-width="3" opacity="0.2" stroke-linecap="round"/>
+  <!-- pin shadow -->
+  <ellipse cx="50" cy="76" rx="10" ry="3.5" fill="#000" opacity="0.25"/>
+  <!-- pin body -->
+  <path d="M 50 25 C 38 25 30 34 30 44 C 30 58 50 73 50 73 C 50 73 70 58 70 44 C 70 34 62 25 50 25 Z" fill="#fff"/>
+  <!-- pin inner circle -->
+  <circle cx="50" cy="42" r="11" fill="#e11d48"/>
+  <!-- T letter -->
+  <text x="50" y="47" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="14" font-weight="bold">T</text>
+</svg>

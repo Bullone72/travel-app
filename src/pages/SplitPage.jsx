@@ -5,8 +5,10 @@ import { formatCurrency, EXPENSE_CATEGORIES } from '../utils/helpers';
 
 export default function SplitPage() {
   const { id } = useParams();
-  const { participants, expenses, addParticipant, updateExpense, removeParticipant, loadTripData } = useApp();
+  const { participants, expenses, addParticipant, addExpense, updateExpense, removeParticipant, loadTripData } = useApp();
   const [showModal, setShowModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', paidBy: '', category: 'altro', isShared: true, date: new Date().toISOString().split('T')[0] });
   const [form, setForm] = useState({ name: '', email: '' });
   const [expandedParticipant, setExpandedParticipant] = useState(null);
   const [exclusionFor, setExclusionFor] = useState(null);
@@ -201,40 +203,63 @@ export default function SplitPage() {
               {isExpanded && (
                 <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                   <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
-                    Spese pagate da {p.name} ({pExpenses.length})
+                    Tutte le spese — tocca per escludere/includere {p.name}
                   </div>
-                  {pExpenses.length === 0 ? (
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nessuna spesa registrata</p>
+                  {sharedExpenses.length === 0 ? (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nessuna spesa condivisa registrata</p>
                   ) : (
-                    pExpenses.map(expense => {
+                    sharedExpenses.map(expense => {
                       const catInfo = EXPENSE_CATEGORIES.find(c => c.value === expense.category);
-                      const splitters = expense.isShared ? getSplitters(expense) : [];
+                      const isExcluded = (expense.excludedFrom || []).includes(p.name);
                       return (
-                        <div key={expense.id} className="expense-row" style={{ marginBottom: 6 }}>
-                          <div className="expense-icon" style={{ width: 32, height: 32, fontSize: '1rem' }}>{catInfo?.icon}</div>
-                          <div className="expense-info">
-                            <div className="expense-desc" style={{ fontSize: '0.8rem' }}>{expense.description}</div>
-                            <div className="expense-meta">
-                              {catInfo?.label} · {new Date(expense.date).toLocaleDateString('it-IT')}
-                              {expense.isShared && (
-                                splitters.length > 0
-                                  ? ` · 🔄 Divisa tra ${splitters.map(s => s.name).join(', ')}`
-                                  : ' · 🔄 Divisa'
-                              )}
-                              {!expense.isShared && ' · 👤 Personale'}
+                        <div
+                          key={expense.id}
+                          onClick={async () => {
+                            const cur = expense.excludedFrom || [];
+                            const next = isExcluded ? cur.filter(n => n !== p.name) : [...cur, p.name];
+                            await updateExpense({ ...expense, excludedFrom: next });
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px',
+                            borderRadius: 8, marginBottom: 4, cursor: 'pointer',
+                            background: isExcluded ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)',
+                            border: isExcluded ? '1px solid rgba(239,68,68,0.25)' : '1px solid transparent',
+                            opacity: isExcluded ? 0.6 : 1,
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <div style={{
+                            width: 28, height: 28, borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.75rem', fontWeight: 700, flexShrink: 0,
+                            background: isExcluded ? 'rgba(239,68,68,0.2)' : 'var(--primary)',
+                            color: isExcluded ? 'var(--danger)' : '#fff',
+                          }}>
+                            {isExcluded ? '✕' : '✓'}
+                          </div>
+                          <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', flexShrink: 0 }}>
+                            {catInfo?.icon}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, textDecoration: isExcluded ? 'line-through' : 'none' }}>{expense.description}</div>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                              {catInfo?.label} · {new Date(expense.date).toLocaleDateString('it-IT')} · {expense.paidBy || '—'}
                             </div>
                           </div>
-                          <div className="expense-amount" style={{ fontSize: '0.85rem' }}>{formatCurrency(expense.amount)}</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.82rem', color: isExcluded ? 'var(--danger)' : 'var(--primary-light)', flexShrink: 0 }}>
+                            {formatCurrency(expense.amount)}
+                          </div>
                         </div>
                       );
                     })
                   )}
 
-                  {sharedExpenses.length > 0 && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => openExclusion(p)} style={{ marginTop: 8 }}>
-                      {excludedCount > 0 ? `⚙️ Modifica esclusioni (${excludedCount})` : '⚙️ Escludi da singole spese'}
-                    </button>
-                  )}
+                  <button className="btn btn-primary btn-sm" onClick={() => {
+                    setExpenseForm({ ...expenseForm, paidBy: p.name });
+                    setShowExpenseModal(true);
+                  }} style={{ marginTop: 10, fontSize: '0.75rem' }}>
+                    ➕ Aggiungi spesa
+                  </button>
                 </div>
               )}
             </div>
@@ -363,6 +388,78 @@ export default function SplitPage() {
                 <button type="submit" className="btn btn-primary">Aggiungi</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showExpenseModal && (
+        <div className="modal-overlay" onClick={() => setShowExpenseModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-handle" />
+            <h2 className="modal-title">Nuova spesa</h2>
+            <div className="form-group">
+              <label className="form-label">Descrizione</label>
+              <input className="form-input" placeholder="Es: Cena, Biglietti..." value={expenseForm.description} onChange={e => setExpenseForm({ ...expenseForm, description: e.target.value })} required autoFocus />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Importo (€)</label>
+                <input className="form-input" type="number" step="0.01" placeholder="0.00" value={expenseForm.amount} onChange={e => setExpenseForm({ ...expenseForm, amount: e.target.value })} required />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Data</label>
+                <input className="form-input" type="date" value={expenseForm.date} onChange={e => setExpenseForm({ ...expenseForm, date: e.target.value })} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Pagato da</label>
+              <select className="form-select" value={expenseForm.paidBy} onChange={e => setExpenseForm({ ...expenseForm, paidBy: e.target.value })}>
+                <option value="">Seleziona...</option>
+                {tripParticipants.map(p => (
+                  <option key={p.id} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Categoria</label>
+              <div className="tag-group">
+                {EXPENSE_CATEGORIES.map(cat => (
+                  <span
+                    key={cat.value}
+                    className={`tag ${expenseForm.category === cat.value ? 'active' : ''}`}
+                    onClick={() => setExpenseForm({ ...expenseForm, category: cat.value })}
+                  >
+                    {cat.icon} {cat.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={expenseForm.isShared} onChange={e => setExpenseForm({ ...expenseForm, isShared: e.target.checked })} />
+                <span style={{ fontSize: '0.85rem' }}>🔄 Spesa da dividere</span>
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowExpenseModal(false)}>Annulla</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!expenseForm.description.trim() || !expenseForm.amount || !expenseForm.paidBy}
+                onClick={async () => {
+                  await addExpense({
+                    ...expenseForm,
+                    amount: Number(expenseForm.amount) || 0,
+                    tripId: id,
+                    excludedFrom: [],
+                  });
+                  setExpenseForm({ description: '', amount: '', paidBy: expenseForm.paidBy, category: 'altro', isShared: true, date: new Date().toISOString().split('T')[0] });
+                  setShowExpenseModal(false);
+                }}
+              >
+                Aggiungi
+              </button>
+            </div>
           </div>
         </div>
       )}

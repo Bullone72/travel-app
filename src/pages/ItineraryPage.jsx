@@ -175,14 +175,11 @@ export default function ItineraryPage() {
                       )}
                       {(item.departure || item.arrival) && (
                         <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                          🚏 {item.departure || '—'} <span style={{ color: 'var(--text-muted)' }}>→</span> {item.arrival || '—'}
-                        </div>
-                      )}
-                      {item.tappe && item.tappe.length > 0 && (
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2, paddingLeft: 16 }}>
-                          {item.tappe.map((t, i) => (
-                            <span key={i}>📍 {t.name || `Tappa ${i + 1}`}{i < item.tappe.length - 1 ? ' → ' : ''}</span>
+                          🚏 {item.departure || '—'}
+                          {(item.tappe && item.tappe.length > 0) && item.tappe.map((t, i) => (
+                            <span key={i}> <span style={{ color: 'var(--text-muted)' }}>→</span> 📍{t.name || `Tappa ${i + 1}`}</span>
                           ))}
+                          <span style={{ color: 'var(--text-muted)' }}> →</span> {item.arrival || '—'}
                         </div>
                       )}
                     </div>

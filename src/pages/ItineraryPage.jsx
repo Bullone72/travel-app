@@ -17,6 +17,7 @@ export default function ItineraryPage() {
     departure: '', departureLat: null, departureLng: null,
     arrival: '', arrivalLat: null, arrivalLng: null,
     type: 'visita', km: '', transportMode: '', duration: '', cost: '', notes: '',
+    tappe: [],
   });
 
   useEffect(() => {
@@ -59,13 +60,15 @@ export default function ItineraryPage() {
       };
 
       const pts = [dep, loc, arr].filter(p => p && p.lat && p.lng);
-      if (pts.length < 2) return { km: 0, coords };
+      const tappePts = (form.tappe || []).filter(t => t.lat && t.lng).map(t => ({ lat: t.lat, lng: t.lng }));
+      const allPts = tappePts.length > 0 ? [dep, ...tappePts, loc, arr].filter(p => p && p.lat && p.lng) : pts;
+      if (allPts.length < 2) return { km: 0, coords };
 
       let total = 0;
-      for (let i = 0; i < pts.length - 1; i++) {
-        const samePoint = Math.abs(pts[i].lat - pts[i + 1].lat) < 0.0001 && Math.abs(pts[i].lng - pts[i + 1].lng) < 0.0001;
+      for (let i = 0; i < allPts.length - 1; i++) {
+        const samePoint = Math.abs(allPts[i].lat - allPts[i + 1].lat) < 0.0001 && Math.abs(allPts[i].lng - allPts[i + 1].lng) < 0.0001;
         if (samePoint) continue;
-        const route = await getRouteDistance(pts[i], pts[i + 1], form.transportMode);
+        const route = await getRouteDistance(allPts[i], allPts[i + 1], form.transportMode);
         if (route && route.distanceKm > 0) total += route.distanceKm;
       }
 
@@ -93,7 +96,7 @@ export default function ItineraryPage() {
     } else {
       addItineraryItem({ ...form, ...coords, tripId: id, km, cost: Number(form.cost) || 0 });
     }
-    setForm({ dayNumber: activeDay, time: '', title: '', description: '', location: '', lat: null, lng: null, departure: '', departureLat: null, departureLng: null, arrival: '', arrivalLat: null, arrivalLng: null, type: 'visita', km: '', transportMode: '', duration: '', cost: '', notes: '' });
+    setForm({ dayNumber: activeDay, time: '', title: '', description: '', location: '', lat: null, lng: null, departure: '', departureLat: null, departureLng: null, arrival: '', arrivalLat: null, arrivalLng: null, type: 'visita', km: '', transportMode: '', duration: '', cost: '', notes: '', tappe: [] });
     setShowModal(false);
   }
 
@@ -108,6 +111,7 @@ export default function ItineraryPage() {
       type: item.type || 'visita', km: item.km?.toString() || '',
       transportMode: item.transportMode || '', duration: item.duration || '',
       cost: item.cost?.toString() || '', notes: item.notes || '',
+      tappe: item.tappe || [],
     });
     setShowModal(true);
   }
@@ -172,6 +176,13 @@ export default function ItineraryPage() {
                       {(item.departure || item.arrival) && (
                         <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
                           🚏 {item.departure || '—'} <span style={{ color: 'var(--text-muted)' }}>→</span> {item.arrival || '—'}
+                        </div>
+                      )}
+                      {item.tappe && item.tappe.length > 0 && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2, paddingLeft: 16 }}>
+                          {item.tappe.map((t, i) => (
+                            <span key={i}>📍 {t.name || `Tappa ${i + 1}`}{i < item.tappe.length - 1 ? ' → ' : ''}</span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -278,6 +289,33 @@ export default function ItineraryPage() {
                   />
                 </div>
               </div>
+              {(form.departure || form.arrival) && (
+                <div className="form-group">
+                  <label className="form-label">📍 Tappe intermedie</label>
+                  {(form.tappe || []).map((t, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', minWidth: 18 }}>{i + 1}.</span>
+                      <div style={{ flex: 1 }}>
+                        <PlaceInput
+                          placeholder={`Tappa ${i + 1}`}
+                          value={t.name || ''}
+                          onChange={r => {
+                            const next = [...form.tappe];
+                            next[i] = { name: r.value, lat: r.lat, lng: r.lng };
+                            setForm({ ...form, tappe: next });
+                          }}
+                        />
+                      </div>
+                      <button type="button" className="btn btn-danger btn-sm" onClick={() => {
+                        setForm({ ...form, tappe: form.tappe.filter((_, j) => j !== i) });
+                      }} style={{ padding: '4px 8px', fontSize: '0.7rem' }}>✕</button>
+                    </div>
+                  ))}
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                    setForm({ ...form, tappe: [...(form.tappe || []), { name: '', lat: null, lng: null }] });
+                  }} style={{ fontSize: '0.75rem' }}>📍 Aggiungi tappa</button>
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">Descrizione</label>
                 <textarea className="form-textarea" placeholder="Dettagli..." value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />

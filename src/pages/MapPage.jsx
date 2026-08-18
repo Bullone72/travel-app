@@ -87,6 +87,11 @@ export default function MapPage() {
   function getRoutePointsForItem(item) {
     const pts = [];
     if (item.departureLat && item.departureLng) pts.push({ lat: item.departureLat, lng: item.departureLng, kind: 'dep', label: item.departure });
+    if (item.tappe && item.tappe.length > 0) {
+      item.tappe.forEach((t, i) => {
+        if (t.lat && t.lng) pts.push({ lat: t.lat, lng: t.lng, kind: 'tappa', label: t.name || `Tappa ${i + 1}` });
+      });
+    }
     if (item.lat && item.lng) pts.push({ lat: item.lat, lng: item.lng, kind: 'loc', label: item.location });
     if (item.arrivalLat && item.arrivalLng) pts.push({ lat: item.arrivalLat, lng: item.arrivalLng, kind: 'arr', label: item.arrival });
     return pts;
@@ -259,6 +264,11 @@ export default function MapPage() {
     markerItems.forEach(item => {
       const mpt = item.lat && item.lng ? { lat: item.lat, lng: item.lng } : { lat: item.arrivalLat, lng: item.arrivalLng };
       addMarker(map, mpt.lat, mpt.lng, markerIdx++, item.title);
+      if (item.tappe && item.tappe.length > 0) {
+        item.tappe.forEach((t, i) => {
+          if (t.lat && t.lng) addMarker(map, t.lat, t.lng, markerIdx++, t.name || `Tappa ${i + 1}`);
+        });
+      }
     });
 
     const fitPoints = markerItems.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
@@ -319,6 +329,17 @@ export default function MapPage() {
         updates.lat = r.lat;
         updates.lng = r.lng;
       }
+    }
+    if (item.tappe && item.tappe.length > 0) {
+      const tappeNext = await Promise.all(item.tappe.map(async (t) => {
+        if (t.lat && t.lng) return t;
+        if (t.name) {
+          const r = await geocodeNominatim(t.name);
+          if (r) return { name: t.name, lat: r.lat, lng: r.lng };
+        }
+        return t;
+      }));
+      updates.tappe = tappeNext;
     }
     if (JSON.stringify(updates) !== JSON.stringify(item)) {
       await updateItineraryItem(updates);
@@ -488,6 +509,13 @@ export default function MapPage() {
                   {(item.departure || item.arrival) && (
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       🚏 {item.departure || '—'} → {item.arrival || '—'}
+                    </div>
+                  )}
+                  {item.tappe && item.tappe.length > 0 && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {item.tappe.map((t, i) => (
+                        <span key={i}>📍 {t.name || `Tappa ${i + 1}`}{i < item.tappe.length - 1 ? ' → ' : ''}</span>
+                      ))}
                     </div>
                   )}
                 </div>

@@ -75,6 +75,7 @@ export function createItineraryItem(data = {}) {
     duration: data.duration || '',
     cost: data.cost || 0,
     notes: data.notes || '',
+    tappe: data.tappe || [],
     createdAt: new Date().toISOString(),
   };
 }

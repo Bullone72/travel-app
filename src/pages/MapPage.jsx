@@ -261,18 +261,39 @@ export default function MapPage() {
     }
 
     let markerIdx = 1;
-    markerItems.forEach(item => {
-      const mpt = item.lat && item.lng ? { lat: item.lat, lng: item.lng } : { lat: item.arrivalLat, lng: item.arrivalLng };
-      addMarker(map, mpt.lat, mpt.lng, markerIdx++, item.title);
-      if (item.tappe && item.tappe.length > 0) {
-        item.tappe.forEach((t, i) => {
-          if (t.lat && t.lng) addMarker(map, t.lat, t.lng, markerIdx++, t.name || `Tappa ${i + 1}`);
+    if (viewMode === 'itinerary') {
+      const ordered = [...dayItems].sort(sortByTime);
+      for (const item of ordered) {
+        const pts = getRoutePointsForItem(item);
+        pts.forEach(pt => {
+          addMarker(map, pt.lat, pt.lng, markerIdx++, pt.label || item.title);
         });
       }
-    });
+    } else {
+      const groups = getDayGroups();
+      const dayNumbers = Object.keys(groups).map(Number).sort((a, b) => a - b);
+      for (const day of dayNumbers) {
+        for (const item of groups[day]) {
+          const pts = getRoutePointsForItem(item);
+          pts.forEach(pt => {
+            addMarker(map, pt.lat, pt.lng, markerIdx++, pt.label || item.title);
+          });
+        }
+      }
+    }
 
-    const fitPoints = markerItems.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
-    fitMapToPoints(map, fitPoints);
+    const fitPoints = [];
+    if (viewMode === 'itinerary') {
+      dayItems.forEach(item => {
+        const pts = getRoutePointsForItem(item);
+        pts.forEach(pt => fitPoints.push({ lat: pt.lat, lng: pt.lng }));
+      });
+    } else {
+      markerItems.forEach(i => {
+        fitPoints.push(i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
+      });
+    }
+    if (fitPoints.length > 0) fitMapToPoints(map, fitPoints);
   }
 
   function dedupe(points) {
@@ -396,34 +417,49 @@ export default function MapPage() {
         )}
       </div>
 
-      {viewMode === 'itinerary' && altRoutes.length > 0 && (
+      {viewMode === 'itinerary' && (
         <div style={{ marginBottom: 12 }}>
           {getDaySegments().map((seg, s) => {
             const alts = altRoutes[s] || [];
             const sel = selectedAlts[s] || 0;
             return (
-              <div key={s} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                  Tragitto {s + 1}: {seg.a.label || 'A'} → {seg.b.label || 'B'}
+              <div key={s} style={{ marginBottom: 8, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-card)' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  🛣️ Tragitto {s + 1}: {seg.a.label || 'A'} → {seg.b.label || 'B'}
                 </div>
-                <div className="route-options" style={{ marginBottom: 0 }}>
-                  {alts.map((r, i) => (
-                    <button
-                      key={i}
-                      className={`route-option ${sel === i ? 'active' : ''}`}
-                      onClick={() => {
-                        const next = [...selectedAlts];
-                        next[s] = i;
-                        setSelectedAlts(next);
-                      }}
-                    >
-                      Percorso {i + 1} · {formatKm(r.distanceKm)} km · {formatDuration(Math.round(r.durationMin))}
-                    </button>
-                  ))}
-                  {alts.length <= 1 && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Solo un percorso disponibile per questo tratto</span>
-                  )}
-                </div>
+                {alts.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {alts.map((r, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          const next = [...selectedAlts];
+                          next[s] = i;
+                          setSelectedAlts(next);
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                          borderRadius: 8, border: sel === i ? '2px solid var(--primary)' : '1px solid var(--border)',
+                          background: sel === i ? 'var(--primary-bg, rgba(102,126,234,0.1))' : 'var(--bg-input)',
+                          cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: '0.8rem',
+                          color: sel === i ? 'var(--primary)' : 'var(--text-secondary)',
+                        }}
+                      >
+                        <span style={{
+                          width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: sel === i ? 'var(--primary)' : 'var(--border)', color: sel === i ? '#fff' : 'var(--text-muted)',
+                          fontWeight: 700, fontSize: '0.7rem', flexShrink: 0,
+                        }}>{i + 1}</span>
+                        <span style={{ flex: 1 }}>
+                          <strong>{formatKm(r.distanceKm)} km</strong> · {formatDuration(Math.round(r.durationMin))}
+                        </span>
+                        {sel === i && <span style={{ color: 'var(--primary)', fontWeight: 700 }}>✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Calcolo percorso...</div>
+                )}
               </div>
             );
           })}

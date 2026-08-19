@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { getSetting, saveSetting } from '../services/database';
 import { getNcAutoSync, getNcConfig, saveNcConfig, setNcAutoSync } from '../services/ncSync';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 export default function SettingsPage() {
   const { exportAllTrips, importTrips, loadTrips, triggerAutoBackup, syncNow, testNcConnection, showNotification } = useApp();
@@ -85,14 +87,37 @@ export default function SettingsPage() {
   }
 
   async function handleExport() {
-    const data = await exportAllTrips();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `travelmate-backup-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const data = await exportAllTrips();
+      const json = JSON.stringify(data, null, 2);
+      const filename = `travelmate-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+      try {
+        await Filesystem.writeFile({ path: filename, data: json, directory: Directory.Cache });
+        const uriResult = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+        await Share.share({ title: 'Backup TravelMate', files: [uriResult.uri], dialogTitle: 'Salva backup TravelMate' });
+        setImportMsg('✅ Backup condiviso!');
+        setTimeout(() => setImportMsg(''), 2000);
+        return;
+      } catch (capErr) {
+        if (capErr.message?.includes('Share') || capErr.message?.includes('cancel')) return;
+      }
+
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      setImportMsg('✅ Backup scaricato!');
+      setTimeout(() => setImportMsg(''), 2000);
+    } catch (e) {
+      console.error('Export failed:', e);
+      setImportMsg('❌ Errore esportazione: ' + e.message);
+      setTimeout(() => setImportMsg(''), 4000);
+    }
   }
 
   function handleImport(e) {
@@ -256,7 +281,11 @@ export default function SettingsPage() {
         </div>
 
         <div className="form-group" style={{ marginBottom: 8 }}>
-          <label className="checkbox-group" onClick={() => setAutoBackup(!autoBackup)}>
+          <label className="checkbox-group" onClick={async () => {
+            const next = !autoBackup;
+            setAutoBackup(next);
+            await saveSetting('auto_backup', next);
+          }}>
             <input type="checkbox" checked={autoBackup} readOnly />
             <span style={{ fontSize: '0.85rem' }}>🔄 Backup automatico (dopo ogni modifica)</span>
           </label>
@@ -315,7 +344,11 @@ export default function SettingsPage() {
         </div>
 
         <div className="form-group" style={{ marginBottom: 8 }}>
-          <label className="checkbox-group" onClick={() => setNcAuto(!ncAuto)}>
+          <label className="checkbox-group" onClick={async () => {
+            const next = !ncAuto;
+            setNcAuto(next);
+            await setNcAutoSync(next);
+          }}>
             <input type="checkbox" checked={ncAuto} readOnly />
             <span style={{ fontSize: '0.85rem' }}>🔄 Sincronizzazione automatica (dopo ogni modifica e all'avvio)</span>
           </label>

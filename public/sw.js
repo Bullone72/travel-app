@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'travelmate-v9';
+﻿const CACHE_NAME = 'travelmate-v10';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

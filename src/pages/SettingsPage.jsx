@@ -11,6 +11,8 @@ export default function SettingsPage() {
   const [showKey, setShowKey] = useState(false);
   const [autoBackup, setAutoBackup] = useState(false);
   const [importMsg, setImportMsg] = useState('');
+  const [pasteJson, setPasteJson] = useState('');
+  const [showPaste, setShowPaste] = useState(false);
   const [keyTestMsg, setKeyTestMsg] = useState('');
   const [testing, setTesting] = useState(false);
 
@@ -92,25 +94,20 @@ export default function SettingsPage() {
       const json = JSON.stringify(data, null, 2);
       const filename = `travelmate-backup-${new Date().toISOString().split('T')[0]}.json`;
 
-      try {
-        await Filesystem.writeFile({ path: filename, data: json, directory: Directory.Cache });
-        const uriResult = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
-        await Share.share({ title: 'Backup TravelMate', files: [uriResult.uri], dialogTitle: 'Salva backup TravelMate' });
-        setImportMsg('✅ Backup condiviso!');
-        setTimeout(() => setImportMsg(''), 2000);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(json);
+        setImportMsg('📋 Backup copiato negli appunti! Incollalo dove vuoi保存.');
+        setTimeout(() => setImportMsg(''), 4000);
         return;
-      } catch (capErr) {
-        if (capErr.message?.includes('Share') || capErr.message?.includes('cancel')) return;
       }
 
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = dataUri;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      setTimeout(() => document.body.removeChild(a), 200);
       setImportMsg('✅ Backup scaricato!');
       setTimeout(() => setImportMsg(''), 2000);
     } catch (e) {
@@ -276,16 +273,50 @@ export default function SettingsPage() {
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button className="btn btn-primary" onClick={handleExport}>
-            📤 Esporta tutto (Backup)
+            📋 Copia Backup
           </button>
           <button className="btn btn-secondary" onClick={() => triggerAutoBackup()}>
             📤 Backup adesso
           </button>
           <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-            📥 Importa da file
+            📥 Importa file
             <input type="file" accept=".json,.txt" onChange={handleImport} style={{ display: 'none' }} />
           </label>
+          <button className="btn btn-secondary" onClick={() => setShowPaste(!showPaste)}>
+            📥 Incolla JSON
+          </button>
         </div>
+
+        {showPaste && (
+          <div style={{ marginBottom: 12 }}>
+            <textarea
+              value={pasteJson}
+              onChange={(e) => setPasteJson(e.target.value)}
+              placeholder="Incolla qui il contenuto del backup JSON..."
+              style={{ width: '100%', minHeight: 100, padding: 8, borderRadius: 8, border: '1px solid var(--border)', fontSize: '0.8rem', resize: 'vertical' }}
+            />
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: 8 }}
+              onClick={async () => {
+                try {
+                  const text = pasteJson.trim();
+                  if (!text) { setImportMsg('❌ Incolla prima il JSON'); setTimeout(() => setImportMsg(''), 3000); return; }
+                  const jsonMatch = text.match(/\{[\s\S]*\}/);
+                  if (!jsonMatch) { setImportMsg('❌ Testo non contiene JSON valido'); setTimeout(() => setImportMsg(''), 3000); return; }
+                  const data = JSON.parse(jsonMatch[0]);
+                  await importTrips(data);
+                  setPasteJson('');
+                  setShowPaste(false);
+                  setImportMsg('✅ Dati importati!');
+                  setTimeout(() => setImportMsg(''), 3000);
+                } catch { setImportMsg('❌ JSON non valido'); setTimeout(() => setImportMsg(''), 3000); }
+              }}
+            >
+              ✅ Importa
+            </button>
+          </div>
+        )}
 
         <div className="form-group" style={{ marginBottom: 8 }}>
           <label className="checkbox-group" onClick={async () => {

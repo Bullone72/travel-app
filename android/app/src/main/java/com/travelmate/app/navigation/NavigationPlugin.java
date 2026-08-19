@@ -20,23 +20,18 @@ public class NavigationPlugin extends Plugin {
             return;
         }
 
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(shareUrl));
-            intent.setPackage("com.here.app.maps");
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getActivity().startActivity(intent);
-            call.resolve(new JSObject().put("opened", true));
-            return;
-        } catch (Exception ignored) {}
+        String[] packages = {"com.here.app.maps", "com.here.app.navi"};
 
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(shareUrl));
-            intent.setPackage("com.here.app.navi");
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getActivity().startActivity(intent);
-            call.resolve(new JSObject().put("opened", true));
-            return;
-        } catch (Exception ignored) {}
+        for (String pkg : packages) {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(shareUrl));
+                intent.setPackage(pkg);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getActivity().startActivity(intent);
+                call.resolve(new JSObject().put("opened", true));
+                return;
+            } catch (Exception ignored) {}
+        }
 
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(shareUrl));

@@ -137,29 +137,36 @@ export async function getRouteAlternatives(points, transportMode = 'car') {
   }
 }
 
-function buildHereShareUrl(startPoint, endPoint, waypoints = []) {
+function buildHereDirectionsUrl(startPoint, endPoint, waypoints = []) {
   const parts = [`${startPoint.lat},${startPoint.lng}`];
   waypoints.forEach(w => {
     if (w.lat && w.lng) parts.push(`${w.lat},${w.lng}`);
   });
   parts.push(`${endPoint.lat},${endPoint.lng}`);
-  return `https://share.here.com/r/${parts.join('/')}`;
+  return `here.directions://v1.0/${parts.join('/')}`;
 }
 
 export async function openInHereWeGo(startPoint, endPoint, waypoints = []) {
   if (!startPoint || !endPoint) return;
 
-  const shareUrl = buildHereShareUrl(startPoint, endPoint, waypoints);
+  const directionsUrl = buildHereDirectionsUrl(startPoint, endPoint, waypoints);
 
   try {
     const { registerPlugin } = await import('@capacitor/core');
     const Navigation = registerPlugin('Navigation');
-    const result = await Navigation.openHereWeGo({ shareUrl });
+    const shareUrl = `https://share.here.com/r/${[`${startPoint.lat},${startPoint.lng}`, ...waypoints.filter(w => w.lat && w.lng).map(w => `${w.lat},${w.lng}`), `${endPoint.lat},${endPoint.lng}`].join('/')}`;
+    const result = await Navigation.openHereWeGo({ shareUrl: directionsUrl, fallbackUrl: shareUrl });
     if (result?.opened) return;
   } catch {}
 
-  const { Browser } = await import('@capacitor/browser');
   try {
+    window.location.href = directionsUrl;
+    return;
+  } catch {}
+
+  const shareUrl = `https://share.here.com/r/${[`${startPoint.lat},${startPoint.lng}`, ...waypoints.filter(w => w.lat && w.lng).map(w => `${w.lat},${w.lng}`), `${endPoint.lat},${endPoint.lng}`].join('/')}`;
+  try {
+    const { Browser } = await import('@capacitor/browser');
     await Browser.open({ url: shareUrl });
     return;
   } catch {}

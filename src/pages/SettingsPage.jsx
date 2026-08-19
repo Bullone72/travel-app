@@ -94,20 +94,27 @@ export default function SettingsPage() {
       const json = JSON.stringify(data, null, 2);
       const filename = `travelmate-backup-${new Date().toISOString().split('T')[0]}.json`;
 
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(json);
-        setImportMsg('📋 Backup copiato negli appunti! Incollalo dove vuoi保存.');
-        setTimeout(() => setImportMsg(''), 4000);
+      try {
+        const { Share } = await import('@capacitor/share');
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        await Filesystem.writeFile({ path: filename, data: json, directory: Directory.Cache });
+        const uriResult = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+        await Share.share({ title: 'Backup TravelMate', files: [uriResult.uri], dialogTitle: 'Salva backup TravelMate' });
+        setImportMsg('✅ Backup condiviso!');
+        setTimeout(() => setImportMsg(''), 2000);
         return;
+      } catch {
+        // fallback
       }
 
-      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = dataUri;
+      a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
-      setTimeout(() => document.body.removeChild(a), 200);
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
       setImportMsg('✅ Backup scaricato!');
       setTimeout(() => setImportMsg(''), 2000);
     } catch (e) {
@@ -273,10 +280,18 @@ export default function SettingsPage() {
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button className="btn btn-primary" onClick={handleExport}>
-            📋 Copia Backup
+            📤 Esporta (Backup)
+          </button>
+          <button className="btn btn-secondary" onClick={async () => {
+            const data = await exportAllTrips();
+            await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+            setImportMsg('📋 Copiato negli appunti!');
+            setTimeout(() => setImportMsg(''), 3000);
+          }}>
+            📋 Copia JSON
           </button>
           <button className="btn btn-secondary" onClick={() => triggerAutoBackup()}>
-            📤 Backup adesso
+            💾 Backup locale
           </button>
           <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
             📥 Importa file

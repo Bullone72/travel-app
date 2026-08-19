@@ -126,7 +126,14 @@ export default function SettingsPage() {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       try {
-        const data = JSON.parse(ev.target.result);
+        let text = ev.target.result;
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          setImportMsg('❌ File non contiene dati JSON validi');
+          setTimeout(() => setImportMsg(''), 4000);
+          return;
+        }
+        const data = JSON.parse(jsonMatch[0]);
         await importTrips(data);
         setImportMsg('Dati importati con successo!');
         setTimeout(() => setImportMsg(''), 3000);
@@ -276,7 +283,7 @@ export default function SettingsPage() {
           </button>
           <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
             📥 Importa da file
-            <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+            <input type="file" accept=".json,.txt" onChange={handleImport} style={{ display: 'none' }} />
           </label>
         </div>
 

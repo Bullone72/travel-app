@@ -17,7 +17,7 @@ export default function ItineraryPage() {
     departure: '', departureLat: null, departureLng: null,
     arrival: '', arrivalLat: null, arrivalLng: null,
     type: 'visita', km: '', transportMode: '', duration: '', cost: '', notes: '',
-    tappe: [],
+    tappe: [], returnTrip: false,
   });
 
   useEffect(() => {
@@ -72,6 +72,18 @@ export default function ItineraryPage() {
         if (route && route.distanceKm > 0) total += route.distanceKm;
       }
 
+      if (form.returnTrip && allPts.length >= 2) {
+        const lastPt = allPts[allPts.length - 1];
+        const firstPt = allPts[0];
+        if (lastPt && firstPt) {
+          const sameReturn = Math.abs(lastPt.lat - firstPt.lat) < 0.0001 && Math.abs(lastPt.lng - firstPt.lng) < 0.0001;
+          if (!sameReturn) {
+            const routeReturn = await getRouteDistance(lastPt, firstPt, form.transportMode);
+            if (routeReturn && routeReturn.distanceKm > 0) total += routeReturn.distanceKm;
+          }
+        }
+      }
+
       return { km: total > 0 ? Math.round(total * 10) / 10 : 0, coords };
     } catch {
       return { km: 0, coords: {} };
@@ -96,7 +108,7 @@ export default function ItineraryPage() {
     } else {
       addItineraryItem({ ...form, ...coords, tripId: id, km, cost: Number(form.cost) || 0 });
     }
-    setForm({ dayNumber: activeDay, time: '', title: '', description: '', location: '', lat: null, lng: null, departure: '', departureLat: null, departureLng: null, arrival: '', arrivalLat: null, arrivalLng: null, type: 'visita', km: '', transportMode: '', duration: '', cost: '', notes: '', tappe: [] });
+    setForm({ dayNumber: activeDay, time: '', title: '', description: '', location: '', lat: null, lng: null, departure: '', departureLat: null, departureLng: null, arrival: '', arrivalLat: null, arrivalLng: null, type: 'visita', km: '', transportMode: '', duration: '', cost: '', notes: '', tappe: [], returnTrip: false });
     setShowModal(false);
   }
 
@@ -111,7 +123,7 @@ export default function ItineraryPage() {
       type: item.type || 'visita', km: item.km?.toString() || '',
       transportMode: item.transportMode || '', duration: item.duration || '',
       cost: item.cost?.toString() || '', notes: item.notes || '',
-      tappe: item.tappe || [],
+      tappe: item.tappe || [], returnTrip: item.returnTrip || false,
     });
     setShowModal(true);
   }
@@ -180,6 +192,7 @@ export default function ItineraryPage() {
                             <span key={i}> <span style={{ color: 'var(--text-muted)' }}>→</span> 📍{t.name || `Tappa ${i + 1}`}</span>
                           ))}
                           <span style={{ color: 'var(--text-muted)' }}> →</span> {item.arrival || '—'}
+                          {item.returnTrip && <span> <span style={{ color: 'var(--text-muted)' }}>→</span> 🔄 {item.departure || '—'}</span>}
                         </div>
                       )}
                     </div>
@@ -313,6 +326,10 @@ export default function ItineraryPage() {
                   }} style={{ fontSize: '0.75rem' }}>📍 Aggiungi tappa</button>
                 </div>
               )}
+              <label className="checkbox-group" onClick={() => setForm({ ...form, returnTrip: !form.returnTrip })} style={{ marginBottom: 12, cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.returnTrip} readOnly />
+                <span style={{ fontSize: '0.85rem' }}>🔄 Andata e ritorno (partenza → destinazione → partenza)</span>
+              </label>
               <div className="form-group">
                 <label className="form-label">Descrizione</label>
                 <textarea className="form-textarea" placeholder="Dettagli..." value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />

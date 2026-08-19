@@ -137,6 +137,54 @@ export async function getRouteAlternatives(points, transportMode = 'car') {
   }
 }
 
+function buildHereShareUrl(startPoint, endPoint, waypoints = []) {
+  const parts = [`${startPoint.lat},${startPoint.lng}`];
+  waypoints.forEach(w => {
+    if (w.lat && w.lng) parts.push(`${w.lat},${w.lng}`);
+  });
+  parts.push(`${endPoint.lat},${endPoint.lng}`);
+  return `https://share.here.com/r/${parts.join('/')}`;
+}
+
+export async function openInHereWeGo(startPoint, endPoint, waypoints = []) {
+  if (!startPoint || !endPoint) return;
+
+  const shareUrl = buildHereShareUrl(startPoint, endPoint, waypoints);
+
+  try {
+    const { registerPlugin } = await import('@capacitor/core');
+    const Navigation = registerPlugin('Navigation');
+    const result = await Navigation.openHereWeGo({ shareUrl });
+    if (result?.opened) return;
+  } catch {}
+
+  const { Browser } = await import('@capacitor/browser');
+  try {
+    await Browser.open({ url: shareUrl });
+    return;
+  } catch {}
+
+  window.open(shareUrl, '_blank');
+}
+
+export async function openInGoogleMaps(startPoint, endPoint, waypoints = []) {
+  if (!startPoint || !endPoint) return;
+
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${startPoint.lat},${startPoint.lng}&destination=${endPoint.lat},${endPoint.lng}&travelmode=driving`;
+  if (waypoints.length > 0) {
+    const wpStr = waypoints.map(w => `${w.lat},${w.lng}`).join('|');
+    url += `&waypoints=${encodeURIComponent(wpStr)}`;
+  }
+
+  try {
+    const { Browser } = await import('@capacitor/browser');
+    await Browser.open({ url });
+    return;
+  } catch {}
+
+  window.open(url, '_blank');
+}
+
 export function openInOsm(startPoint, endPoint) {
   const base = 'https://www.openstreetmap.org/directions?engine=fossgis_osrm_car';
   if (startPoint && endPoint) {
@@ -144,33 +192,5 @@ export function openInOsm(startPoint, endPoint) {
     window.open(base + params, '_blank');
   } else {
     window.open('https://www.openstreetmap.org/directions', '_blank');
-  }
-}
-
-export async function openInHereWeGo(startPoint, endPoint) {
-  if (!startPoint || !endPoint) return;
-
-  try {
-    const { registerPlugin } = await import('@capacitor/core');
-    const Navigation = registerPlugin('Navigation');
-    const result = await Navigation.openHereWeGo({
-      startLat: startPoint.lat, startLng: startPoint.lng,
-      endLat: endPoint.lat, endLng: endPoint.lng,
-    });
-    if (result?.opened) return;
-  } catch {}
-
-  const geoUrl = `geo:${endPoint.lat},${endPoint.lng}?q=${startPoint.lat},${startPoint.lng}+to+${endPoint.lat},${endPoint.lng}`;
-  const hereUrl = `https://wego.here.com/directions?from=${startPoint.lat},${startPoint.lng}&to=${endPoint.lat},${endPoint.lng}`;
-
-  try {
-    const a = document.createElement('a');
-    a.href = geoUrl;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => document.body.removeChild(a), 500);
-  } catch {
-    window.open(hereUrl, '_blank');
   }
 }

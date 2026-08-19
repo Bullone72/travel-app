@@ -5,7 +5,7 @@ import { ITINERARY_TYPES, calculateTotalKm, formatDuration, formatKm } from '../
 import PlaceSearch from '../components/PlaceSearch';
 import {
   createMap, addMarker, addRoutePolyline, addRouteSegment, fitMapToPoints, clearMarkers,
-  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInHereWeGo, DAY_COLORS,
+  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInHereWeGo, openInGoogleMaps, DAY_COLORS,
 } from '../components/LeafletMap';
 
 export default function MapPage() {
@@ -412,12 +412,22 @@ export default function MapPage() {
       {points.length >= 2 && (
         <div className="card" style={{ marginBottom: 12, padding: 12 }}>
           <div className="card-title" style={{ marginBottom: 8 }}>🧭 Naviga verso destinazione</div>
-          <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => {
+          {(() => {
             const pts = points.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
-            openInHereWeGo(pts[0], pts[pts.length - 1]);
-          }}>
-            ▶️ Avvia navigazione con HERE WeGo
-          </button>
+            const start = pts[0];
+            const end = pts[pts.length - 1];
+            const waypoints = pts.slice(1, -1);
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
+                  ▶️ Avvia con HERE WeGo
+                </button>
+                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => openInGoogleMaps(start, end, waypoints)}>
+                  🗺️ Avvia con Google Maps
+                </button>
+              </div>
+            );
+          })()}
         </div>
       )}
 

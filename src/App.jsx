@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
@@ -28,6 +29,33 @@ function Notification() {
   );
 }
 
+function UpdateBanner() {
+  const [updateVer, setUpdateVer] = useState(null);
+  useEffect(() => {
+    const ver = localStorage.getItem('travelmate_update_available');
+    if (ver) setUpdateVer(ver);
+  }, []);
+  if (!updateVer) return null;
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0,
+      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+      color: 'white', padding: '10px 16px', zIndex: 400,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      fontSize: '0.8rem', fontWeight: 600,
+    }}>
+      <span>Aggiornamento disponibile (v{updateVer})</span>
+      <button onClick={() => {
+        localStorage.removeItem('travelmate_update_available');
+        window.open('https://github.com/Bullone72/travel-app/releases/latest', '_system');
+      }} style={{
+        background: 'rgba(255,255,255,0.25)', border: 'none', color: 'white',
+        padding: '4px 12px', borderRadius: 6, fontWeight: 700, cursor: 'pointer',
+      }}>Scarica</button>
+    </div>
+  );
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -50,6 +78,7 @@ export default function App() {
   return (
     <AppProvider>
       <BrowserRouter>
+        <UpdateBanner />
         <Notification />
         <AppRoutes />
       </BrowserRouter>

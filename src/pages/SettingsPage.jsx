@@ -430,8 +430,8 @@ export default function SettingsPage() {
       <div className="card">
         <div className="card-title" style={{ marginBottom: 12 }}>📱 Info</div>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-          <p><strong>TravelMate</strong> - Gestione Viaggi v1.1.0</p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Build: 2026-08-19 · SW v10</p>
+          <p><strong>TravelMate</strong> - Gestione Viaggi v1.4.0</p>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Build: 2026-08-19</p>
           <p>Tutti i dati sono salvati localmente nel browser (IndexedDB).</p>
           <p>Con la sincronizzazione attiva, i dati vengono salvati anche in un Gist segreto su GitHub e ripristinati su ogni dispositivo.</p>
           <p style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>

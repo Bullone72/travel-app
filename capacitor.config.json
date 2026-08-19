@@ -3,8 +3,6 @@
   "appName": "TravelMate",
   "webDir": "dist",
   "server": {
-    "url": "https://travel-app-tau-ashen.vercel.app",
-    "cleartext": true,
     "androidScheme": "https"
   },
   "android": {

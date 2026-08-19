@@ -1,6 +1,14 @@
-v1.2.0 - L'ultima APK che ti serve.
+v1.4.0
 
-- Il WebView ora scarica SEMPRE la pagina fresca da internet (no cache)
-- Da ora in poi ogni aggiornamento web arriva aprendo l'app
-- Navigazione: solo il giorno selezionato
-- Info versione in Impostazioni
+FIX DEFINITIVO - Il codice e' ora bundled direttamente nell'APK.
+Nessuna dipendenza dal cache del WebView Android.
+
+Cosa cambia:
+- L'app carica il codice dal file APK, non da internet
+- La versione mostrata in Impostazioni corrisponde sempre a quella reale
+- Se esce una nuova versione, vedrai un banner in alto con il pulsante "Scarica"
+- Navigate elimina: fix percorso solo giorno selezionato
+- Navigazione HERE WeGo funzionante
+- Tappe intermedie, andata e ritorno, split spese
+
+Per aggiornamenti futuri: installa la nuova APK dal link in Releases.

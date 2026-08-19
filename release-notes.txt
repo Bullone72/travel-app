@@ -1,5 +1,6 @@
-Installa questa APK UNA SOLA VOLTA. Poi tutti gli aggiornamenti arrivano aprendo l'app.
+v1.2.0 - L'ultima APK che ti serve.
 
-- Navigazione HERE WeGo via intent nativo Android
+- Il WebView ora scarica SEMPRE la pagina fresca da internet (no cache)
+- Da ora in poi ogni aggiornamento web arriva aprendo l'app
+- Navigazione: solo il giorno selezionato
 - Info versione in Impostazioni
-- Build v1.1.1

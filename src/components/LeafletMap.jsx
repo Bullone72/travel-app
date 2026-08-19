@@ -146,3 +146,17 @@ export function openInOsm(startPoint, endPoint) {
     window.open('https://www.openstreetmap.org/directions', '_blank');
   }
 }
+
+export function openInOsmAnd(startPoint, endPoint, profile = 'car') {
+  const profiles = { car: 'car', foot: 'pedestrian', bike: 'bicycle' };
+  const p = profiles[profile] || 'car';
+  if (startPoint && endPoint) {
+    window.open(`osmand://navigate?startLat=${startPoint.lat}&startLon=${startPoint.lng}&endLat=${endPoint.lat}&endLon=${endPoint.lng}&profile=${p}`, '_blank');
+  }
+}
+
+export function openInHereWeGo(startPoint, endPoint) {
+  if (startPoint && endPoint) {
+    window.open(`https://wego.here.com/directions?to=${endPoint.lat},${endPoint.lng}&from=${startPoint.lat},${startPoint.lng}`, '_blank');
+  }
+}

@@ -5,7 +5,7 @@ import { ITINERARY_TYPES, calculateTotalKm, formatDuration, formatKm } from '../
 import PlaceSearch from '../components/PlaceSearch';
 import {
   createMap, addMarker, addRoutePolyline, addRouteSegment, fitMapToPoints, clearMarkers,
-  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInOsm, DAY_COLORS,
+  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInOsm, openInOsmAnd, openInHereWeGo, DAY_COLORS,
 } from '../components/LeafletMap';
 
 export default function MapPage() {
@@ -407,15 +407,32 @@ export default function MapPage() {
         <button className="btn btn-secondary" onClick={() => setViewMode('all')}>
           🗺️ Tutti i giorni (percorso totale)
         </button>
-        {points.length >= 2 && (
-          <button className="btn btn-primary" onClick={() => {
-            const pts = points.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
-            openInOsm(pts[0], pts[pts.length - 1]);
-          }}>
-            🧭 Apri indicazioni stradali
-          </button>
-        )}
       </div>
+
+      {points.length >= 2 && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="card-title" style={{ marginBottom: 8 }}>🧭 Naviga verso destinazione</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(() => {
+              const pts = points.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
+              const start = pts[0], end = pts[pts.length - 1];
+              return (
+                <>
+                  <button className="btn btn-primary" style={{ flex: 1, minWidth: 120 }} onClick={() => openInHereWeGo(start, end)}>
+                    🟦 HERE WeGo
+                  </button>
+                  <button className="btn btn-secondary" style={{ flex: 1, minWidth: 120 }} onClick={() => openInOsmAnd(start, end)}>
+                    🟩 OsmAnd
+                  </button>
+                  <button className="btn btn-secondary" style={{ flex: 1, minWidth: 120 }} onClick={() => openInOsm(start, end)}>
+                    🟧 OpenStreetMap
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {viewMode === 'itinerary' && (
         <div style={{ marginBottom: 12 }}>
@@ -427,7 +444,9 @@ export default function MapPage() {
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
                   🛣️ Tragitto {s + 1}: {seg.a.label || 'A'} → {seg.b.label || 'B'}
                 </div>
-                {alts.length > 0 ? (
+                {loadingRoute && alts.length === 0 ? (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Calcolo percorso...</div>
+                ) : alts.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {alts.map((r, i) => (
                       <button
@@ -458,7 +477,9 @@ export default function MapPage() {
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Calcolo percorso...</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {seg.a.lat && seg.b.lat ? 'Nessuna alternativa trovata' : 'Inserisci partenza e arrivo'}
+                  </div>
                 )}
               </div>
             );

@@ -1,14 +1,14 @@
-v1.4.0
+v1.5.0
 
-FIX DEFINITIVO - Il codice e' ora bundled direttamente nell'APK.
-Nessuna dipendenza dal cache del WebView Android.
+FIX CACHE + DATI PRESERVATI
 
 Cosa cambia:
-- L'app carica il codice dal file APK, non da internet
-- La versione mostrata in Impostazioni corrisponde sempre a quella reale
-- Se esce una nuova versione, vedrai un banner in alto con il pulsante "Scarica"
-- Navigate elimina: fix percorso solo giorno selezionato
-- Navigazione HERE WeGo funzionante
+- server.url ripristinato: l'origine e' di nuovo https://travel-app-tau-ashen.vercel.app
+- I tuoi dati (viaggi, spese, ecc.) sono di accessibili dall'IndexedDB originale
+- La cache WebView viene pulita ad ogni avvio PRIMA che l'app carichi
+- Il codice latest viene sempre scaricato da Vercel
+- Se c'e un aggiornamento disponibile, vedi un banner in alto con pulsante "Scarica"
+- Navigate HERE WeGo funzionante
 - Tappe intermedie, andata e ritorno, split spese
 
-Per aggiornamenti futuri: installa la nuova APK dal link in Releases.
+Il viaggio che avevi creato dovrebbe riapparire dopo l'installazione.

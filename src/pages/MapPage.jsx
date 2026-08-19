@@ -409,26 +409,42 @@ export default function MapPage() {
         </button>
       </div>
 
-      {(() => {
-        const dayPoints = dayItems.filter(i => (i.lat && i.lng) || (i.arrivalLat && i.arrivalLng));
-        if (dayPoints.length < 2) return null;
-        return (
-          <div className="card" style={{ marginBottom: 12, padding: 12 }}>
-            <div className="card-title" style={{ marginBottom: 8 }}>🧭 Naviga giorno {activeDay}</div>
-            {(() => {
-              const pts = dayPoints.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
-              const start = pts[0];
-              const end = pts[pts.length - 1];
-              const waypoints = pts.slice(1, -1);
+      {dayItems.length > 0 && (
+        <div className="card" style={{ marginBottom: 12, padding: 12 }}>
+          <div className="card-title" style={{ marginBottom: 8 }}>🧭 Naviga giorno {activeDay}</div>
+          {(() => {
+            const allPts = [];
+            dayItems.forEach(i => {
+              if (i.departureLat && i.departureLng) allPts.push({ lat: i.departureLat, lng: i.departureLng, label: i.departure });
+              if (i.lat && i.lng) allPts.push({ lat: i.lat, lng: i.lng, label: i.location });
+              if (i.arrivalLat && i.arrivalLng) allPts.push({ lat: i.arrivalLat, lng: i.arrivalLng, label: i.arrival });
+            });
+            if (allPts.length < 2) {
               return (
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
-                  ▶️ Avvia navigazione con HERE WeGo
-                </button>
+                <div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+                    Servono almeno 2 punti con coordinate. Usa "📍 Geocodifica" o "📍 Trova posizioni" nella mappa qui sotto.
+                  </p>
+                  <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => {
+                    const items = dayItems.filter(i => i.location || i.departure || i.arrival);
+                    items.forEach(i => handleGeocode(i));
+                  }}>
+                    📍 Geocodifica tutti i punti del giorno {activeDay}
+                  </button>
+                </div>
               );
-            })()}
-          </div>
-        );
-      })()}
+            }
+            const start = allPts[0];
+            const end = allPts[allPts.length - 1];
+            const waypoints = allPts.slice(1, -1);
+            return (
+              <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
+                ▶️ Avvia navigazione con HERE WeGo
+              </button>
+            );
+          })()}
+        </div>
+      )}
 
       {viewMode === 'itinerary' && (
         <div style={{ marginBottom: 12 }}>

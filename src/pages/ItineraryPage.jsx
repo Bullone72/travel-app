@@ -90,20 +90,22 @@ export default function ItineraryPage() {
     }
   }
 
-  async   async function recalcKmFromForm(f) {
+  async function recalcKmFromForm(f) {
     const result = await autoCalculateKm(f);
     if (result.km > 0) {
       setForm(prev => ({ ...prev, km: String(result.km), ...result.coords }));
+    } else {
+      setForm(prev => ({ ...prev, km: '' }));
     }
   }
 
-  function handleAdd(e) {
+  async function handleAdd(e) {
     e.preventDefault();
     if (!form.title.trim()) return;
 
     let km = Number(form.km) || 0;
     let coords = {};
-    if (!km && (form.departure || form.arrival || form.location)) {
+    if ((form.departure || form.arrival || form.location)) {
       const result = await autoCalculateKm(form);
       km = result.km || 0;
       coords = result.coords;

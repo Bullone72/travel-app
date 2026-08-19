@@ -90,7 +90,14 @@ export default function ItineraryPage() {
     }
   }
 
-  async function handleAdd(e) {
+  async   async function recalcKmFromForm(f) {
+    const result = await autoCalculateKm(f);
+    if (result.km > 0) {
+      setForm(prev => ({ ...prev, km: String(result.km), ...result.coords }));
+    }
+  }
+
+  function handleAdd(e) {
     e.preventDefault();
     if (!form.title.trim()) return;
 
@@ -326,7 +333,14 @@ export default function ItineraryPage() {
                   }} style={{ fontSize: '0.75rem' }}>📍 Aggiungi tappa</button>
                 </div>
               )}
-              <label className="checkbox-group" onClick={() => setForm({ ...form, returnTrip: !form.returnTrip })} style={{ marginBottom: 12, cursor: 'pointer' }}>
+              <label className="checkbox-group" onClick={async () => {
+                const next = !form.returnTrip;
+                const nextForm = { ...form, returnTrip: next };
+                setForm(nextForm);
+                if (next && (form.departure || form.arrival || form.location)) {
+                  await recalcKmFromForm(nextForm);
+                }
+              }} style={{ marginBottom: 12, cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.returnTrip} readOnly />
                 <span style={{ fontSize: '0.85rem' }}>🔄 Andata e ritorno (partenza → destinazione → partenza)</span>
               </label>

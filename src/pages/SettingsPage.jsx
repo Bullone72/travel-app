@@ -366,11 +366,14 @@ export default function SettingsPage() {
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               className="form-input"
-              type={showNcPw ? 'text' : 'password'}
+              type="text"
               placeholder="github_pat_..."
               value={ghToken}
               onChange={e => setGhToken(e.target.value)}
-              style={{ flex: 1 }}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
+              style={{ flex: 1, fontFamily: 'monospace' }}
             />
             <button
               className="btn btn-secondary"

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatKm, calculateTotalExpenses, calculateTotalKm, TRANSPORT_MODES, ACCOMMODATION_TYPES } from '../utils/helpers';
+import { exportTripData } from '../services/database';
 
 export default function TripDetailPage() {
   const { id } = useParams();
@@ -38,9 +39,49 @@ export default function TripDetailPage() {
   const totalKm = calculateTotalKm(itinerary);
   const budgetUsed = currentTrip.budget > 0 ? (totalExpenses / currentTrip.budget * 100) : 0;
 
+  const [shareMsg, setShareMsg] = useState('');
+
   function handleSave() {
     updateTrip({ ...form, totalKm });
     setEditing(false);
+  }
+
+  async function handleShareTrip() {
+    try {
+      const data = await exportTripData(id);
+      const json = JSON.stringify(data, null, 2);
+      const filename = `travelmate-${currentTrip.name || 'viaggio'}.json`;
+
+      try {
+        const { Share } = await import('@capacitor/share');
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        await Filesystem.writeFile({ path: filename, data: json, directory: Directory.Cache });
+        const uriResult = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+        await Share.share({ title: `Viaggio: ${currentTrip.name}`, files: [uriResult.uri], dialogTitle: 'Condividi viaggio' });
+        return;
+      } catch {}
+
+      try {
+        await navigator.clipboard.writeText(json);
+        setShareMsg('📋 JSON copiato negli appunti!');
+        setTimeout(() => setShareMsg(''), 3000);
+        return;
+      } catch {}
+
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      setShareMsg('✅ File scaricato!');
+      setTimeout(() => setShareMsg(''), 3000);
+    } catch (e) {
+      setShareMsg('❌ Errore: ' + e.message);
+      setTimeout(() => setShareMsg(''), 4000);
+    }
   }
 
   function toggleTransport(mode) {
@@ -63,10 +104,14 @@ export default function TripDetailPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>{currentTrip.name}</h1>
-        <button className="btn btn-secondary btn-sm" onClick={() => editing ? handleSave() : setEditing(true)}>
-          {editing ? '💾 Salva' : '✏️ Modifica'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-secondary btn-sm" onClick={handleShareTrip}>📤 Condividi</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => editing ? handleSave() : setEditing(true)}>
+            {editing ? '💾 Salva' : '✏️ Modifica'}
+          </button>
+        </div>
       </div>
+      {shareMsg && <p style={{ fontSize: '0.8rem', color: shareMsg.includes('❌') ? 'var(--danger)' : 'var(--success)', margin: '0 0 8px 0' }}>{shareMsg}</p>}
 
       <p className="page-subtitle" style={{ marginTop: 0 }}>
         {currentTrip.destination && <span style={{ fontWeight: 600 }}>📍 {currentTrip.destination}</span>}

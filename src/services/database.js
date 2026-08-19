@@ -166,6 +166,23 @@ export async function importAllData(data) {
   await tx.done;
 }
 
+export async function importTripData(data) {
+  const db = await getDB();
+  const tx = db.transaction([STORES.TRIPS, STORES.EXPENSES, STORES.WALLETS, STORES.ITINERARY, STORES.PARTICIPANTS], 'readwrite');
+  if (data.trip) await tx.objectStore(STORES.TRIPS).put(data.trip);
+  const mapItems = (storeName, items) => {
+    if (!items) return;
+    const store = tx.objectStore(storeName);
+    for (const item of items) store.put(item);
+  };
+  mapItems(STORES.EXPENSES, data.expenses);
+  mapItems(STORES.WALLETS, data.wallets);
+  mapItems(STORES.ITINERARY, data.itinerary);
+  mapItems(STORES.PARTICIPANTS, data.participants);
+  await tx.done;
+  return data.trip;
+}
+
 export async function exportTripData(tripId) {
   const db = await getDB();
   const trip = await db.get(STORES.TRIPS, tripId);

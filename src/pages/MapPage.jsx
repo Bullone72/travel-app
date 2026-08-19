@@ -5,7 +5,7 @@ import { ITINERARY_TYPES, calculateTotalKm, formatDuration, formatKm } from '../
 import PlaceSearch from '../components/PlaceSearch';
 import {
   createMap, addMarker, addRoutePolyline, addRouteSegment, fitMapToPoints, clearMarkers,
-  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInHereWeGo, openInGoogleMaps, DAY_COLORS,
+  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInHereWeGo, DAY_COLORS,
 } from '../components/LeafletMap';
 
 export default function MapPage() {
@@ -418,14 +418,9 @@ export default function MapPage() {
             const end = pts[pts.length - 1];
             const waypoints = pts.slice(1, -1);
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
-                  ▶️ Avvia con HERE WeGo
-                </button>
-                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => openInGoogleMaps(start, end, waypoints)}>
-                  🗺️ Avvia con Google Maps
-                </button>
-              </div>
+              <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
+                ▶️ Avvia navigazione con HERE WeGo
+              </button>
             );
           })()}
         </div>

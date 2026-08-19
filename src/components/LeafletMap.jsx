@@ -137,59 +137,33 @@ export async function getRouteAlternatives(points, transportMode = 'car') {
   }
 }
 
-function buildHereDirectionsUrl(startPoint, endPoint, waypoints = []) {
+function buildHereShareUrl(startPoint, endPoint, waypoints = []) {
   const parts = [`${startPoint.lat},${startPoint.lng}`];
   waypoints.forEach(w => {
     if (w.lat && w.lng) parts.push(`${w.lat},${w.lng}`);
   });
   parts.push(`${endPoint.lat},${endPoint.lng}`);
-  return `here.directions://v1.0/${parts.join('/')}`;
+  return `https://share.here.com/r/${parts.join('/')}`;
 }
 
 export async function openInHereWeGo(startPoint, endPoint, waypoints = []) {
   if (!startPoint || !endPoint) return;
 
-  const directionsUrl = buildHereDirectionsUrl(startPoint, endPoint, waypoints);
+  const shareUrl = buildHereShareUrl(startPoint, endPoint, waypoints);
 
   try {
     const { registerPlugin } = await import('@capacitor/core');
     const Navigation = registerPlugin('Navigation');
-    const shareUrl = `https://share.here.com/r/${[`${startPoint.lat},${startPoint.lng}`, ...waypoints.filter(w => w.lat && w.lng).map(w => `${w.lat},${w.lng}`), `${endPoint.lat},${endPoint.lng}`].join('/')}`;
-    const result = await Navigation.openHereWeGo({ shareUrl: directionsUrl, fallbackUrl: shareUrl });
+    const result = await Navigation.openHereWeGo({ shareUrl });
     if (result?.opened) return;
   } catch {}
 
+  const { Browser } = await import('@capacitor/browser');
   try {
-    window.location.href = directionsUrl;
-    return;
-  } catch {}
-
-  const shareUrl = `https://share.here.com/r/${[`${startPoint.lat},${startPoint.lng}`, ...waypoints.filter(w => w.lat && w.lng).map(w => `${w.lat},${w.lng}`), `${endPoint.lat},${endPoint.lng}`].join('/')}`;
-  try {
-    const { Browser } = await import('@capacitor/browser');
     await Browser.open({ url: shareUrl });
-    return;
-  } catch {}
-
-  window.open(shareUrl, '_blank');
-}
-
-export async function openInGoogleMaps(startPoint, endPoint, waypoints = []) {
-  if (!startPoint || !endPoint) return;
-
-  let url = `https://www.google.com/maps/dir/?api=1&origin=${startPoint.lat},${startPoint.lng}&destination=${endPoint.lat},${endPoint.lng}&travelmode=driving`;
-  if (waypoints.length > 0) {
-    const wpStr = waypoints.map(w => `${w.lat},${w.lng}`).join('|');
-    url += `&waypoints=${encodeURIComponent(wpStr)}`;
+  } catch {
+    window.open(shareUrl, '_blank');
   }
-
-  try {
-    const { Browser } = await import('@capacitor/browser');
-    await Browser.open({ url });
-    return;
-  } catch {}
-
-  window.open(url, '_blank');
 }
 
 export function openInOsm(startPoint, endPoint) {

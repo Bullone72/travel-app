@@ -1,0 +1,5 @@
+Installa questa APK UNA SOLA VOLTA. Dopo, tutti gli aggiornamenti futuri arrivano aprendo l'app.
+
+Navigazione HERE WeGo: il pulsante ora apre direttamente l'app HERE WeGo con il percorso.
+Aggiunto pulsante Google Maps come alternativa.
+Tappe intermedie incluse nella navigazione.

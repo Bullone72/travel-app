@@ -24,6 +24,18 @@ public class NavigationPlugin extends Plugin {
 
         for (String pkg : packages) {
             try {
+                Intent intent = new Intent("com.here.maps.DIRECTIONS");
+                intent.setPackage(pkg);
+                intent.setData(Uri.parse(shareUrl));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getActivity().startActivity(intent);
+                call.resolve(new JSObject().put("opened", true));
+                return;
+            } catch (Exception ignored) {}
+        }
+
+        for (String pkg : packages) {
+            try {
                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(shareUrl));
                 intent.setPackage(pkg);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

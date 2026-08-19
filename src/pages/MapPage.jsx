@@ -5,7 +5,7 @@ import { ITINERARY_TYPES, calculateTotalKm, formatDuration, formatKm } from '../
 import PlaceSearch from '../components/PlaceSearch';
 import {
   createMap, addMarker, addRoutePolyline, addRouteSegment, fitMapToPoints, clearMarkers,
-  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInOsm, openInOsmAnd, openInHereWeGo, DAY_COLORS,
+  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInHereWeGo, DAY_COLORS,
 } from '../components/LeafletMap';
 
 export default function MapPage() {
@@ -410,27 +410,14 @@ export default function MapPage() {
       </div>
 
       {points.length >= 2 && (
-        <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card" style={{ marginBottom: 12, padding: 12 }}>
           <div className="card-title" style={{ marginBottom: 8 }}>🧭 Naviga verso destinazione</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {(() => {
-              const pts = points.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
-              const start = pts[0], end = pts[pts.length - 1];
-              return (
-                <>
-                  <button className="btn btn-primary" style={{ flex: 1, minWidth: 120 }} onClick={() => openInHereWeGo(start, end)}>
-                    🟦 HERE WeGo
-                  </button>
-                  <button className="btn btn-secondary" style={{ flex: 1, minWidth: 120 }} onClick={() => openInOsmAnd(start, end)}>
-                    🟩 OsmAnd
-                  </button>
-                  <button className="btn btn-secondary" style={{ flex: 1, minWidth: 120 }} onClick={() => openInOsm(start, end)}>
-                    🟧 OpenStreetMap
-                  </button>
-                </>
-              );
-            })()}
-          </div>
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => {
+            const pts = points.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
+            openInHereWeGo(pts[0], pts[pts.length - 1]);
+          }}>
+            ▶️ Avvia navigazione con HERE WeGo
+          </button>
         </div>
       )}
 

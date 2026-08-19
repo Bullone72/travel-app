@@ -119,7 +119,7 @@ export async function getRouteAlternatives(points, transportMode = 'car') {
       ? (transportMode === 'bicicletta' ? 'bike' : 'foot')
       : 'driving';
     const coords = points.map(p => `${p.lng},${p.lat}`).join(';');
-    const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&alternatives=true&number=3`;
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&alternatives=true`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('Routing failed');
     const data = await response.json();
@@ -147,16 +147,13 @@ export function openInOsm(startPoint, endPoint) {
   }
 }
 
-export function openInOsmAnd(startPoint, endPoint, profile = 'car') {
-  const profiles = { car: 'car', foot: 'pedestrian', bike: 'bicycle' };
-  const p = profiles[profile] || 'car';
-  if (startPoint && endPoint) {
-    window.open(`osmand://navigate?startLat=${startPoint.lat}&startLon=${startPoint.lng}&endLat=${endPoint.lat}&endLon=${endPoint.lng}&profile=${p}`, '_blank');
-  }
-}
-
-export function openInHereWeGo(startPoint, endPoint) {
-  if (startPoint && endPoint) {
-    window.open(`https://wego.here.com/directions?to=${endPoint.lat},${endPoint.lng}&from=${startPoint.lat},${startPoint.lng}`, '_blank');
+export async function openInHereWeGo(startPoint, endPoint) {
+  if (!startPoint || !endPoint) return;
+  const url = `https://wego.here.com/directions?from=${startPoint.lat},${startPoint.lng}&to=${endPoint.lat},${endPoint.lng}`;
+  try {
+    const { Browser } = await import('@capacitor/browser');
+    await Browser.open({ url });
+  } catch {
+    window.location.href = url;
   }
 }

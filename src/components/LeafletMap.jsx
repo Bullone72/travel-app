@@ -149,6 +149,8 @@ export function openInOsm(startPoint, endPoint) {
 
 export async function openInHereWeGo(startPoint, endPoint) {
   if (!startPoint || !endPoint) return;
+  const url = `https://wego.here.com/directions?from=${startPoint.lat},${startPoint.lng}&to=${endPoint.lat},${endPoint.lng}`;
+
   try {
     const { registerPlugin } = await import('@capacitor/core');
     const Navigation = registerPlugin('Navigation');
@@ -156,7 +158,17 @@ export async function openInHereWeGo(startPoint, endPoint) {
       startLat: startPoint.lat, startLng: startPoint.lng,
       endLat: endPoint.lat, endLng: endPoint.lng,
     });
-  } catch {
-    window.open(`https://wego.here.com/directions?from=${startPoint.lat},${startPoint.lng}&to=${endPoint.lat},${endPoint.lng}`, '_blank');
+    return;
+  } catch {}
+
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Naviga con HERE WeGo', url });
+      return;
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') return;
   }
+
+  window.open(url, '_blank');
 }

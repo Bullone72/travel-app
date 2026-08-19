@@ -149,26 +149,28 @@ export function openInOsm(startPoint, endPoint) {
 
 export async function openInHereWeGo(startPoint, endPoint) {
   if (!startPoint || !endPoint) return;
-  const url = `https://wego.here.com/directions?from=${startPoint.lat},${startPoint.lng}&to=${endPoint.lat},${endPoint.lng}`;
 
   try {
     const { registerPlugin } = await import('@capacitor/core');
     const Navigation = registerPlugin('Navigation');
-    await Navigation.openHereWeGo({
+    const result = await Navigation.openHereWeGo({
       startLat: startPoint.lat, startLng: startPoint.lng,
       endLat: endPoint.lat, endLng: endPoint.lng,
     });
-    return;
+    if (result?.opened) return;
   } catch {}
 
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: 'Naviga con HERE WeGo', url });
-      return;
-    }
-  } catch (e) {
-    if (e.name === 'AbortError') return;
-  }
+  const geoUrl = `geo:${endPoint.lat},${endPoint.lng}?q=${startPoint.lat},${startPoint.lng}+to+${endPoint.lat},${endPoint.lng}`;
+  const hereUrl = `https://wego.here.com/directions?from=${startPoint.lat},${startPoint.lng}&to=${endPoint.lat},${endPoint.lng}`;
 
-  window.open(url, '_blank');
+  try {
+    const a = document.createElement('a');
+    a.href = geoUrl;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => document.body.removeChild(a), 500);
+  } catch {
+    window.open(hereUrl, '_blank');
+  }
 }

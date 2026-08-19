@@ -3,17 +3,24 @@
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Pragma", "value": "no-cache" }
       ]
     },
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache" }
+        { "key": "Cache-Control", "value": "no-store" }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/((?!sw.js|assets|manifest|favicon|icon).*)", "destination": "/index.html" }
+    { "source": "/((?!assets|manifest|favicon|icon|sw).*)", "destination": "/index.html" }
   ]
 }

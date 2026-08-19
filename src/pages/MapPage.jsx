@@ -409,22 +409,26 @@ export default function MapPage() {
         </button>
       </div>
 
-      {points.length >= 2 && (
-        <div className="card" style={{ marginBottom: 12, padding: 12 }}>
-          <div className="card-title" style={{ marginBottom: 8 }}>🧭 Naviga verso destinazione</div>
-          {(() => {
-            const pts = points.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
-            const start = pts[0];
-            const end = pts[pts.length - 1];
-            const waypoints = pts.slice(1, -1);
-            return (
-              <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
-                ▶️ Avvia navigazione con HERE WeGo
-              </button>
-            );
-          })()}
-        </div>
-      )}
+      {(() => {
+        const dayPoints = dayItems.filter(i => (i.lat && i.lng) || (i.arrivalLat && i.arrivalLng));
+        if (dayPoints.length < 2) return null;
+        return (
+          <div className="card" style={{ marginBottom: 12, padding: 12 }}>
+            <div className="card-title" style={{ marginBottom: 8 }}>🧭 Naviga giorno {activeDay}</div>
+            {(() => {
+              const pts = dayPoints.map(i => i.lat && i.lng ? { lat: i.lat, lng: i.lng } : { lat: i.arrivalLat, lng: i.arrivalLng });
+              const start = pts[0];
+              const end = pts[pts.length - 1];
+              const waypoints = pts.slice(1, -1);
+              return (
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
+                  ▶️ Avvia navigazione con HERE WeGo
+                </button>
+              );
+            })()}
+          </div>
+        );
+      })()}
 
       {viewMode === 'itinerary' && (
         <div style={{ marginBottom: 12 }}>

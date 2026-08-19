@@ -149,11 +149,14 @@ export function openInOsm(startPoint, endPoint) {
 
 export async function openInHereWeGo(startPoint, endPoint) {
   if (!startPoint || !endPoint) return;
-  const url = `https://wego.here.com/directions?from=${startPoint.lat},${startPoint.lng}&to=${endPoint.lat},${endPoint.lng}`;
   try {
-    const { Browser } = await import('@capacitor/browser');
-    await Browser.open({ url });
+    const { registerPlugin } = await import('@capacitor/core');
+    const Navigation = registerPlugin('Navigation');
+    await Navigation.openHereWeGo({
+      startLat: startPoint.lat, startLng: startPoint.lng,
+      endLat: endPoint.lat, endLng: endPoint.lng,
+    });
   } catch {
-    window.location.href = url;
+    window.open(`https://wego.here.com/directions?from=${startPoint.lat},${startPoint.lng}&to=${endPoint.lat},${endPoint.lng}`, '_blank');
   }
 }

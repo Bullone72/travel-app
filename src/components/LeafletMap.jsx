@@ -175,3 +175,16 @@ export function openInOsm(startPoint, endPoint) {
     window.open('https://www.openstreetmap.org/directions', '_blank');
   }
 }
+
+export function openInGoogleMaps(startPoint, endPoint) {
+  if (!startPoint || !endPoint) return;
+  const url = `https://www.google.com/maps/dir/?api=1&origin=${startPoint.lat},${startPoint.lng}&destination=${endPoint.lat},${endPoint.lng}&travelmode=driving`;
+  window.open(url, '_blank');
+}
+
+export function openInWaze(startPoint, endPoint) {
+  if (!startPoint) return;
+  const dest = endPoint || startPoint;
+  const url = `https://www.waze.com/ul?ll=${dest.lat},${dest.lng}&navigate=yes`;
+  window.open(url, '_blank');
+}

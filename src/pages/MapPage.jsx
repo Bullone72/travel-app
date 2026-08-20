@@ -5,7 +5,7 @@ import { ITINERARY_TYPES, calculateTotalKm, formatDuration, formatKm } from '../
 import PlaceSearch from '../components/PlaceSearch';
 import {
   createMap, addMarker, addRoutePolyline, addRouteSegment, fitMapToPoints, clearMarkers,
-  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInHereWeGo, DAY_COLORS,
+  geocodeNominatim, getRouteDistance, getRouteAlternatives, openInHereWeGo, openInGoogleMaps, openInWaze, DAY_COLORS,
 } from '../components/LeafletMap';
 
 export default function MapPage() {
@@ -438,9 +438,17 @@ export default function MapPage() {
             const end = allPts[allPts.length - 1];
             const waypoints = allPts.slice(1, -1);
             return (
-              <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
-                ▶️ Avvia navigazione con HERE WeGo
-              </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '10px 8px' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
+                  🗺️ HERE WeGo
+                </button>
+                <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '10px 8px', background: '#4285F4' }} onClick={() => openInGoogleMaps(start, end)}>
+                  📍 Google Maps
+                </button>
+                <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '10px 8px', background: '#33CCFF' }} onClick={() => openInWaze(start, end)}>
+                  💙 Waze
+                </button>
+              </div>
             );
           })()}
         </div>

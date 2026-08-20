@@ -94,7 +94,7 @@ export default function HomePage() {
                   style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', padding: 4, borderRadius: 6, fontSize: '0.9rem', lineHeight: 1, opacity: 0.6 }}
                   onClick={(e) => { e.stopPropagation(); if (window.confirm(`Eliminare il viaggio "${trip.name}"? Questa azione non può essere annullata.`)) removeTrip(trip.id); }}
                 >
-                  🗑️
+                  ✕
                 </button>
               </div>
               <div className="trip-stats">

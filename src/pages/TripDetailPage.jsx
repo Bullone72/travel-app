@@ -220,8 +220,26 @@ export default function TripDetailPage() {
         {participants.length > 0 ? (
           <div>
             {participants.map(p => {
-              const paid = expenses.filter(e => e.paidBy === p.name).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-              const balance = paid - (expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) / participants.length);
+              const tripExpenses = expenses.filter(e => e.tripId === id);
+              const tripParticipants = participants;
+              const paid = tripExpenses.filter(e => e.paidBy === p.name).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+              let owed = 0;
+              for (const e of tripExpenses) {
+                const amount = Number(e.amount) || 0;
+                if (!e.isShared) continue;
+                let splitters = tripParticipants.filter(pp => !pp.isExcluded);
+                if (e.splitAmong && e.splitAmong.length > 0) {
+                  splitters = splitters.filter(pp => e.splitAmong.includes(pp.name));
+                }
+                if (e.paidBy && !splitters.some(pp => pp.name === e.paidBy)) {
+                  const payer = tripParticipants.find(pp => pp.name === e.paidBy);
+                  if (payer && !payer.isExcluded) splitters = [...splitters, payer];
+                }
+                splitters = splitters.filter(pp => !(e.excludedFrom || []).includes(pp.name));
+                if (splitters.length === 0 || !splitters.some(pp => pp.name === p.name)) continue;
+                owed += amount / splitters.length;
+              }
+              const balance = paid - owed;
               return (
               <div key={p.id} className="participant-card">
                 <div className="participant-avatar">{p.name.charAt(0).toUpperCase()}</div>

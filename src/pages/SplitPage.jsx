@@ -73,12 +73,12 @@ export default function SplitPage() {
   }
 
   function getExcludedCount(name) {
-    return sharedExpenses.filter(e => (e.excludedFrom || []).includes(name)).length;
+    return tripExpenses.filter(e => (e.excludedFrom || []).includes(name)).length;
   }
 
   function openExclusion(p) {
     const draft = {};
-    sharedExpenses.forEach(e => {
+    tripExpenses.forEach(e => {
       draft[e.id] = (e.excludedFrom || []).includes(p.name);
     });
     setExclusionFor(p);
@@ -87,7 +87,7 @@ export default function SplitPage() {
 
   async function saveExclusion() {
     const name = exclusionFor.name;
-    for (const e of sharedExpenses) {
+    for (const e of tripExpenses) {
       const excluded = !!exclusionDraft[e.id];
       const cur = e.excludedFrom || [];
       const curExcluded = cur.includes(name);
@@ -322,21 +322,21 @@ export default function SplitPage() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button className="btn btn-secondary btn-sm" onClick={() => {
                 const draft = {};
-                sharedExpenses.forEach(e => draft[e.id] = true);
+                tripExpenses.forEach(e => draft[e.id] = true);
                 setExclusionDraft(draft);
               }}>
                 🚫 Escludi da tutte
               </button>
               <button className="btn btn-secondary btn-sm" onClick={() => {
                 const draft = {};
-                sharedExpenses.forEach(e => draft[e.id] = false);
+                tripExpenses.forEach(e => draft[e.id] = false);
                 setExclusionDraft(draft);
               }}>
                 🙋 Includi in tutte
               </button>
             </div>
             <div style={{ maxHeight: '45vh', overflowY: 'auto' }}>
-              {sharedExpenses.map(e => {
+              {tripExpenses.map(e => {
                 const catInfo = EXPENSE_CATEGORIES.find(c => c.value === e.category);
                 const excluded = !!exclusionDraft[e.id];
                 return (

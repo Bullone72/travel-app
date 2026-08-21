@@ -8,7 +8,7 @@ export default function SplitPage() {
   const { participants, expenses, addParticipant, addExpense, updateExpense, removeParticipant, loadTripData } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', paidBy: '', category: 'altro', isShared: true, date: new Date().toISOString().split('T')[0] });
+  const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', paidBy: '', category: 'altro', isShared: true, splitAmong: [], date: new Date().toISOString().split('T')[0] });
   const [form, setForm] = useState({ name: '', email: '' });
   const [expandedParticipant, setExpandedParticipant] = useState(null);
   const [exclusionFor, setExclusionFor] = useState(null);
@@ -44,6 +44,10 @@ export default function SplitPage() {
     let base = tripParticipants.filter(p => !p.isExcluded);
     if (e.splitAmong && e.splitAmong.length > 0) {
       base = base.filter(p => e.splitAmong.includes(p.name));
+    }
+    if (e.paidBy && !base.some(p => p.name === e.paidBy)) {
+      const payer = tripParticipants.find(p => p.name === e.paidBy);
+      if (payer && !payer.isExcluded) base = [...base, payer];
     }
     return base.filter(p => !(e.excludedFrom || []).includes(p.name));
   }
@@ -440,6 +444,39 @@ export default function SplitPage() {
                 <span style={{ fontSize: '0.85rem' }}>🔄 Spesa da dividere</span>
               </label>
             </div>
+            {expenseForm.isShared && (
+              <div className="form-group">
+                <label className="form-label">Dividi tra</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {tripParticipants.map(p => {
+                    const selected = expenseForm.splitAmong.includes(p.name);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          const next = selected
+                            ? expenseForm.splitAmong.filter(n => n !== p.name)
+                            : [...expenseForm.splitAmong, p.name];
+                          setExpenseForm({ ...expenseForm, splitAmong: next });
+                        }}
+                        style={{
+                          padding: '6px 12px', borderRadius: 20, border: selected ? '2px solid var(--primary)' : '1px solid var(--border)',
+                          background: selected ? 'var(--primary-bg, rgba(102,126,234,0.1))' : 'var(--bg-input)',
+                          color: selected ? 'var(--primary)' : 'var(--text-secondary)',
+                          fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+                        }}
+                      >
+                        {selected ? '✓ ' : ''}{p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                  {expenseForm.splitAmong.length === 0 ? 'Tutti i partecipanti' : `${expenseForm.splitAmong.length} selezionati`}
+                </div>
+              </div>
+            )}
             <div className="modal-actions">
               <button type="button" className="btn btn-secondary" onClick={() => setShowExpenseModal(false)}>Annulla</button>
               <button
@@ -453,7 +490,7 @@ export default function SplitPage() {
                     tripId: id,
                     excludedFrom: [],
                   });
-                  setExpenseForm({ description: '', amount: '', paidBy: expenseForm.paidBy, category: 'altro', isShared: true, date: new Date().toISOString().split('T')[0] });
+                  setExpenseForm({ description: '', amount: '', paidBy: expenseForm.paidBy, category: 'altro', isShared: true, splitAmong: [], date: new Date().toISOString().split('T')[0] });
                   setShowExpenseModal(false);
                 }}
               >

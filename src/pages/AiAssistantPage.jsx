@@ -254,52 +254,59 @@ out body 25;`;
     }
 
     let transitInfo = '';
-    const transitKeywords = /\b(tren[oi]|treno|bus|autobus|fermata|stazion[eai]|linea|orari?\s*(del|dei|degli)?\s*(tren[oi]|bus)|trasport[oi]|collegament[oi]|partenz[ae]|arriv[oi]|percorso|viaggi[ao])\b/i;
-    const fromToMatch = userMessage.match(/(?:da|from|partendo da)\s+(.+?)(?:\s+a|\s+per|\s+→|\s*[-–—]\s*|\s+arriv[ao] a)\s+(.+?)(?:\?|$|\.|!|,)/i)
-      || userMessage.match(/(.+?)\s+(?:a|→|per|arriv[ao] a)\s+(.+?)(?:\?|$|\.|!|,)/i);
+    const transitKeywords = /\b(tren[oi]|treno|bus|autobus|fermata|stazion[eai]|linea|orari?\s*(del|dei|degli)?\s*(tren[oi]|bus)|trasport[oi]|collegament[oi]|partenz[ae]|arriv[oi]|percorso|viaggi[ao]|colleg[ao]|how (do i|to get)|come (arriv|vad)|come si va)\b/i;
+    const fromToMatch = userMessage.match(/(?:da|from|partendo da)\s+(.+?)(?:\s+(?:a|per|→|arriv[ao] a|to)\s+)\s*(.+?)(?:\?|$|\.|!|,|\s*$)/i)
+      || userMessage.match(/(.+?)\s+(?:a|→|per|arriv[ao] a)\s+(.+?)(?:\?|$|\.|!|,|\s*$)/i)
+      || userMessage.match(/(?:orari|collegamenti|tren[oi]|bus)\s+(?:da|from)\s+(.+?)\s+(?:a|to)\s+(.+?)(?:\?|$|\.|!|,)/i);
     if (transitKeywords.test(userMessage) && fromToMatch) {
       const fromName = fromToMatch[1].trim();
       const toName = fromToMatch[2].trim();
       try {
-        const [fromRes, toRes] = await Promise.all([
-          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fromName)}&limit=1`, { headers: { 'Accept': 'application/json' } }),
-          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(toName)}&limit=1`, { headers: { 'Accept': 'application/json' } }),
+        const [fromStops, toStops] = await Promise.all([
+          fetch(`https://efa.sta.bz.it/apb/XML_STOPFINDER_REQUEST?locationServerActive=1&stateless=1&type_sf=any&name_sf=${encodeURIComponent(fromName)}&outputFormat=JSON`).then(r => r.json()),
+          fetch(`https://efa.sta.bz.it/apb/XML_STOPFINDER_REQUEST?locationServerActive=1&stateless=1&type_sf=any&name_sf=${encodeURIComponent(toName)}&outputFormat=JSON`).then(r => r.json()),
         ]);
-        const [fromData, toData] = await Promise.all([fromRes.json(), toRes.json()]);
-        if (fromData.length > 0 && toData.length > 0) {
-          const fromLat = parseFloat(fromData[0].lat);
-          const fromLon = parseFloat(fromData[0].lon);
-          const toLat = parseFloat(toData[0].lat);
-          const toLon = parseFloat(toData[0].lon);
+        const fromPts = fromStops?.stopFinder?.points || [];
+        const toPts = toStops?.stopFinder?.points || [];
+        const fromStop = fromPts.find(p => p.anyType === 'stop' && p.best === '1') || fromPts.find(p => p.anyType === 'stop');
+        const toStop = toPts.find(p => p.anyType === 'stop' && p.best === '1') || toPts.find(p => p.anyType === 'stop');
+        if (fromStop && toStop) {
           const now = new Date();
-          const departsAfter = now.toISOString();
-          const urls = [
-            `https://v6.db.transport.rest/journeys?from=${fromLat},${fromLon}&to=${toLat},${toLon}&results=5&language=it&departure=${departsAfter}`,
-            `https://v5.db.transport.rest/journeys?from=${fromLat},${fromLon}&to=${toLat},${toLon}&results=5&language=it&departure=${departsAfter}`,
-          ];
-          let journeys = null;
-          for (const url of urls) {
-            try {
-              const trRes = await fetch(url);
-              if (trRes.ok) { journeys = await trRes.json(); break; }
-            } catch {}
-          }
-          if (journeys && journeys.journeys && journeys.journeys.length > 0) {
-            const lines = journeys.journeys.map((j, i) => {
-              const depTime = j.legs?.[0]?.departure ? new Date(j.legs[0].departure).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '?';
-              const arrTime = j.legs?.[j.legs.length - 1]?.arrival ? new Date(j.legs[j.legs.length - 1].arrival).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '?';
-              const duration = j.legs?.[0]?.departure && j.legs?.[j.legs.length - 1]?.arrival
-                ? Math.round((new Date(j.legs[j.legs.length - 1].arrival) - new Date(j.legs[0].departure)) / 60000)
-                : null;
-              const viaParts = j.legs.map(l => {
-                const prod = l.product || {};
-                return `${prod.name || prod.line || '?'} (${prod.operator || ''})`;
-              }).join(' → ');
-              return `  ${i + 1}. Partenza ${depTime} → Arrivo ${arrTime}${duration ? ', durata: ' + duration + ' min' : ''} | ${viaParts}`;
-            }).join('\n');
-            transitInfo = `\n\n🚂 ORARI TRENO/BUS REALI (fonte: transport.rest, dati live):\nPercorso da "${fromData[0].display_name?.split(',')[0] || fromName}" a "${toData[0].display_name?.split(',')[0] || toName}":\n${lines}`;
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+          const hh = String(now.getHours()).padStart(2, '0');
+          const mm = String(now.getMinutes()).padStart(2, '0');
+          const tripUrl = `https://efa.sta.bz.it/apb/XML_TRIP_REQUEST2?language=it&odvMacro=true&coordOutputFormat=WGS84[DD.DDDDD]&name_origin=${fromStop.ref.id}&type_origin=stop&name_destination=${toStop.ref.id}&type_destination=stop&calcNumberOfTrips=5&itdDate=${y}${m}${d}&itdTime=${hh}${mm}`;
+          const tripRes = await fetch(tripUrl);
+          const tripXml = await tripRes.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(tripXml, 'text/xml');
+          const routes = doc.querySelectorAll('itdRoute');
+          if (routes.length > 0) {
+            const lines = [];
+            routes.forEach((route, i) => {
+              const dur = route.getAttribute('publicDuration') || route.getAttribute('duration') || '?';
+              const changes = route.getAttribute('changes') || '0';
+              const legs = route.querySelectorAll('itdPartialRoute');
+              const legParts = [];
+              legs.forEach(leg => {
+                const mot = leg.querySelector('itdMeansOfTransport');
+                const lineName = mot?.getAttribute('shortname') || mot?.getAttribute('name') || '?';
+                const operator = mot?.querySelector('itdOperator name')?.textContent || mot?.getAttribute('productName') || '';
+                const depPt = leg.querySelector('itdPoint[usage="departure"]');
+                const arrPt = leg.querySelector('itdPoint[usage="arrival"]');
+                const depTime = depPt ? `${depPt.querySelector('itdTime')?.getAttribute('hour')}:${depPt.querySelector('itdTime')?.getAttribute('minute')}` : '?';
+                const arrTime = arrPt ? `${arrPt.querySelector('itdTime')?.getAttribute('hour')}:${arrPt.querySelector('itdTime')?.getAttribute('minute')}` : '?';
+                const depStation = depPt?.getAttribute('nameWO') || depPt?.getAttribute('name') || '';
+                const arrStation = arrPt?.getAttribute('nameWO') || arrPt?.getAttribute('name') || '';
+                legParts.push(`${depTime}-${arrTime} ${lineName} (${operator}) ${depStation}→${arrStation}`);
+              });
+              lines.push(`  ${i + 1}. Durata: ${dur}, Cambi: ${changes}\n     ${legParts.join('\n     ')}`);
+            });
+            transitInfo = `\n\n🚂 ORARI TRENO/BUS REALI (fonte: Südtirol EFA, dati live):\nPercorso da "${fromStop.name}" a "${toStop.name}":\n${lines.join('\n')}`;
           } else {
-            transitInfo = `\n\n🚂 Ho cercato treni/bus da "${fromName}" a "${toName}" ma non ho trovato collegamenti diretti nelle prossime ore. Prova a verificare su trenitalia.com o flixbus.com.`;
+            transitInfo = `\n\n🚂 Ho cercato treni/bus da "${fromName}" a "${toName}" ma non ho trovato collegamenti nelle prossime ore. Prova a verificare su suedtirolmobil.info o trenitalia.com.`;
           }
         }
       } catch {}

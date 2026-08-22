@@ -213,7 +213,47 @@ export default function AiAssistantPage() {
       ? `\n\n📍 POSIZIONE ATTUALE DELL'UTENTE IN QUESTO MOMENTO: "${loc.name}" (lat ${loc.lat.toFixed(4)}, lng ${loc.lng.toFixed(4)}).\nL'utente si trova ORA in questo luogo. Per QUALSIASI consiglio su ristoranti, luoghi, attività o cose da vedere, usa SEMPRE questa posizione come riferimento. La destinazione del viaggio può essere diversa: IGNORALA completamente quando consigli luoghi o ristoranti, a meno che l'utente non chieda esplicitamente di quella.`
       : `\n\nL'utente NON ha condiviso la posizione attuale: in questo caso usa la destinazione del viaggio come posizione di riferimento per i consigli.`;
 
-    const systemPrompt = `IMPORTANTE: Rispondi SEMPRE e ESCLUSIVAMENTE in italiano. NON usare MAI l'inglese né altre lingue. Tutte le parole, le frasi e le spiegazioni DEVONO essere in italiano.\n\nSei un assistente di viaggio esperto e amichevole. Fornisci consigli pratici e dettagliati su ristoranti, luoghi da vedere, attività, trasporti, alloggi e qualsiasi informazione utile per i viaggiatori. Sii conciso ma informativo. ${context} ${locationInstruction}\n\nREGOLA ASSOLUTA: non inventare MAI nomi di ristoranti, locali, vie o indirizzi. Non elencare luoghi di tua memoria. Dai solo consigli generali (tipi di cucina, zone, come scegliere, cosa aspettarsi) SENZA citare nomi o indirizzi specifici. Se l'utente chiede nomi concreti, consigliali di usare la pagina Mappa dell'app, dove può cercare locali reali verificati.`;
+    let nearbyPois = '';
+    if (loc && loc.lat && loc.lng) {
+      try {
+        const query = `[out:json][timeout:8];
+(
+  node["amenity"~"restaurant|cafe|bar|pub|fast_food|biergarten"](around:1000,${loc.lat},${loc.lng});
+  node["tourism"~"attraction|museum|viewpoint|artwork|information"](around:1500,${loc.lat},${loc.lng});
+  node["shop"~"supermarket|convenience|bakery|deli"](around:800,${loc.lat},${loc.lng});
+);
+out body 25;`;
+        const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          body: `data=${encodeURIComponent(query)}`,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        });
+        if (overpassRes.ok) {
+          const overpassData = await overpassRes.json();
+          const elements = overpassData.elements || [];
+          if (elements.length > 0) {
+            const pois = elements.map(el => {
+              const name = el.tags?.name || '';
+              const type = el.tags?.amenity || el.tags?.tourism || el.tags?.shop || '';
+              const cuisine = el.tags?.cuisine || '';
+              const addr = [el.tags?.['addr:street'], el.tags?.['addr:housenumber']].filter(Boolean).join(' ') || '';
+              const rating = el.tags?.rating || '';
+              const phone = el.tags?.phone || el.tags?.['contact:phone'] || '';
+              const hours = el.tags?.opening_hours || '';
+              const dist = Math.round(Math.sqrt(Math.pow((el.lat - loc.lat) * 111320, 2) + Math.pow((el.lon - loc.lng) * 111320 * Math.cos(loc.lat * Math.PI / 180), 2)));
+              return { name, type, cuisine, addr, rating, phone, hours, dist };
+            }).filter(p => p.name);
+            if (pois.length > 0) {
+              nearbyPois = '\n\n📍 LOCALI REALI TROVATI NELLA ZONA (da OpenStreetMap, raggio ~1km): ' + pois.map(p =>
+                `\n- ${p.name} (${p.type}${p.cuisine ? ', cucina: ' + p.cuisine : ''})${p.addr ? ', ' + p.addr : ''}${p.hours ? ', orari: ' + p.hours : ''}, ~${p.dist}m`
+              ).join('');
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const systemPrompt = `IMPORTANTE: Rispondi SEMPRE e ESCLUSIVAMENTE in italiano. NON usare MAI l'inglese né altre lingue. Tutte le parole, le frasi e le spiegazioni DEVONO essere in italiano.\n\nSei un assistente di viaggio esperto e amichevole. Fornisci consigli pratici e dettagliati su ristoranti, luoghi da vedere, attività, trasporti, alloggi e qualsiasi informazione utile per i viaggiatori. Sii conciso ma informativo. ${context} ${locationInstruction}${nearbyPois}\n\nQuando hai a disposizione la lista dei locali reali dalla zona, PUOI e DEVi consigliarli all'utente per nome, menzionando tipo di locale, cucina, indirizzo e distanza. Usa quelli come riferimento concreto. Se l'utente chiede qualcosa che non è nella lista, dai comunque consigli generali ma specifica che non hai dati verificati per quel tipo.`;
 
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {

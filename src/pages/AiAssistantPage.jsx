@@ -253,7 +253,59 @@ out body 25;`;
       } catch {}
     }
 
-    const systemPrompt = `IMPORTANTE: Rispondi SEMPRE e ESCLUSIVAMENTE in italiano. NON usare MAI l'inglese né altre lingue. Tutte le parole, le frasi e le spiegazioni DEVONO essere in italiano.\n\nSei un assistente di viaggio esperto e amichevole. Fornisci consigli pratici e dettagliati su ristoranti, luoghi da vedere, attività, trasporti, alloggi e qualsiasi informazione utile per i viaggiatori. Sii conciso ma informativo. ${context} ${locationInstruction}${nearbyPois}\n\nQuando hai a disposizione la lista dei locali reali dalla zona, PUOI e DEVi consigliarli all'utente per nome, menzionando tipo di locale, cucina, indirizzo e distanza. Usa quelli come riferimento concreto. Se l'utente chiede qualcosa che non è nella lista, dai comunque consigli generali ma specifica che non hai dati verificati per quel tipo.`;
+    let transitInfo = '';
+    const transitKeywords = /\b(tren[oi]|treno|bus|autobus|fermata|stazion[eai]|linea|orari?\s*(del|dei|degli)?\s*(tren[oi]|bus)|trasport[oi]|collegament[oi]|partenz[ae]|arriv[oi]|percorso|viaggi[ao])\b/i;
+    const fromToMatch = userMessage.match(/(?:da|from|partendo da)\s+(.+?)(?:\s+a|\s+per|\s+→|\s*[-–—]\s*|\s+arriv[ao] a)\s+(.+?)(?:\?|$|\.|!|,)/i)
+      || userMessage.match(/(.+?)\s+(?:a|→|per|arriv[ao] a)\s+(.+?)(?:\?|$|\.|!|,)/i);
+    if (transitKeywords.test(userMessage) && fromToMatch) {
+      const fromName = fromToMatch[1].trim();
+      const toName = fromToMatch[2].trim();
+      try {
+        const [fromRes, toRes] = await Promise.all([
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fromName)}&limit=1`, { headers: { 'Accept': 'application/json' } }),
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(toName)}&limit=1`, { headers: { 'Accept': 'application/json' } }),
+        ]);
+        const [fromData, toData] = await Promise.all([fromRes.json(), toRes.json()]);
+        if (fromData.length > 0 && toData.length > 0) {
+          const fromLat = parseFloat(fromData[0].lat);
+          const fromLon = parseFloat(fromData[0].lon);
+          const toLat = parseFloat(toData[0].lat);
+          const toLon = parseFloat(toData[0].lon);
+          const now = new Date();
+          const departsAfter = now.toISOString();
+          const urls = [
+            `https://v6.db.transport.rest/journeys?from=${fromLat},${fromLon}&to=${toLat},${toLon}&results=5&language=it&departure=${departsAfter}`,
+            `https://v5.db.transport.rest/journeys?from=${fromLat},${fromLon}&to=${toLat},${toLon}&results=5&language=it&departure=${departsAfter}`,
+          ];
+          let journeys = null;
+          for (const url of urls) {
+            try {
+              const trRes = await fetch(url);
+              if (trRes.ok) { journeys = await trRes.json(); break; }
+            } catch {}
+          }
+          if (journeys && journeys.journeys && journeys.journeys.length > 0) {
+            const lines = journeys.journeys.map((j, i) => {
+              const depTime = j.legs?.[0]?.departure ? new Date(j.legs[0].departure).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '?';
+              const arrTime = j.legs?.[j.legs.length - 1]?.arrival ? new Date(j.legs[j.legs.length - 1].arrival).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '?';
+              const duration = j.legs?.[0]?.departure && j.legs?.[j.legs.length - 1]?.arrival
+                ? Math.round((new Date(j.legs[j.legs.length - 1].arrival) - new Date(j.legs[0].departure)) / 60000)
+                : null;
+              const viaParts = j.legs.map(l => {
+                const prod = l.product || {};
+                return `${prod.name || prod.line || '?'} (${prod.operator || ''})`;
+              }).join(' → ');
+              return `  ${i + 1}. Partenza ${depTime} → Arrivo ${arrTime}${duration ? ', durata: ' + duration + ' min' : ''} | ${viaParts}`;
+            }).join('\n');
+            transitInfo = `\n\n🚂 ORARI TRENO/BUS REALI (fonte: transport.rest, dati live):\nPercorso da "${fromData[0].display_name?.split(',')[0] || fromName}" a "${toData[0].display_name?.split(',')[0] || toName}":\n${lines}`;
+          } else {
+            transitInfo = `\n\n🚂 Ho cercato treni/bus da "${fromName}" a "${toName}" ma non ho trovato collegamenti diretti nelle prossime ore. Prova a verificare su trenitalia.com o flixbus.com.`;
+          }
+        }
+      } catch {}
+    }
+
+    const systemPrompt = `IMPORTANTE: Rispondi SEMPRE e ESCLUSIVAMENTE in italiano. NON usare MAI l'inglese né altre lingue. Tutte le parole, le frasi e le spiegazioni DEVONO essere in italiano.\n\nSei un assistente di viaggio esperto e amichevole. Fornisci consigli pratici e dettagliati su ristoranti, luoghi da vedere, attività, trasporti, alloggi e qualsiasi informazione utile per i viaggiatori. Sii conciso ma informativo. ${context} ${locationInstruction}${nearbyPois}${transitInfo}\n\nQuando hai a disposizione la lista dei locali reali dalla zona, PUOI e DEVi consigliarli all'utente per nome, menzionando tipo di locale, cucina, indirizzo e distanza. Usa quelli come riferimento concreto. Se l'utente chiede qualcosa che non è nella lista, dai comunque consigli generali ma specifica che non hai dati verificati per quel tipo.\n\nQuando hai dati sui trasporti in tempo reale (treno/bus), USALI per rispondere con orari precisi. Non inventare orari: se hai i dati reali, cita orari e durata esatti.`;
 
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {

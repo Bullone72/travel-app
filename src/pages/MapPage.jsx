@@ -396,21 +396,21 @@ export default function MapPage() {
       <PlaceSearch location={searchLocation} onShowOnMap={showSearchOnMap} onDetect={detectCurrentLocation} detecting={detecting} onLocationChange={handleLocationChange} />
 
       <div className="card" style={{ margin: '12px 0 16px' }}>
-        <div className="card-title" style={{ marginBottom: 8 }}>🚂 Trasporti pubblici (Südtirol / EFA)</div>
+        <div className="card-title" style={{ marginBottom: 8 }}>🚂 Trasporti pubblici</div>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
-          Cerca orari reali di treni e bus in Alto Adige.
+          Cerca orari reali di treni e bus in tutta Europa (DB, ÖBB, SBB, Trenitalia, SNCF, SAD...).
         </p>
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <input
             type="text"
-            placeholder="Da (es. San Candido)"
+            placeholder="Da (es. München Hbf, Roma Termini)"
             value={transitFrom}
             onChange={e => setTransitFrom(e.target.value)}
             style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.85rem' }}
           />
           <input
             type="text"
-            placeholder="A (es. Dobbiaco)"
+            placeholder="A (es. Innsbruck Hbf, Firenze SMN)"
             value={transitTo}
             onChange={e => setTransitTo(e.target.value)}
             style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.85rem' }}
@@ -421,21 +421,66 @@ export default function MapPage() {
               if (!transitFrom.trim() || !transitTo.trim()) return;
               setTransitLoading(true);
               setTransitResults(null);
-              try {
-                const r1 = await fetch(`https://efa.sta.bz.it/api/endpoint/XML_STOPFINDER_REQUEST?language=it&sf=${encodeURIComponent(transitFrom)}&type_sf=any`);
+
+              async function fetchWithTimeout(url, opts, ms = 15000) {
+                const c = new AbortController();
+                const t = setTimeout(() => c.abort(), ms);
+                try { return await fetch(url, { ...opts, signal: c.signal }); } finally { clearTimeout(t); }
+              }
+
+              async function searchTransportRest(from, to) {
+                const r1 = await fetchWithTimeout(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(from)}&addresses=false&poi=false`);
+                if (!r1.ok) return null;
+                const stops1 = await r1.json();
+                const s1 = stops1.find(s => s.type === 'stop');
+                if (!s1) return null;
+
+                const r2 = await fetchWithTimeout(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(to)}&addresses=false&poi=false`);
+                if (!r2.ok) return null;
+                const stops2 = await r2.json();
+                const s2 = stops2.find(s => s.type === 'stop');
+                if (!s2) return null;
+
+                const r3 = await fetchWithTimeout(`https://v6.db.transport.rest/stops/${s1.id}/departures?results=12&stopovers=true`);
+                if (!r3.ok) return null;
+                const departures = await r3.json();
+
+                const matching = departures.filter(d => {
+                  const destName = (d.direction || '').toLowerCase();
+                  return destName.includes(s2.name.toLowerCase().split(',')[0]) ||
+                         destName.includes(to.toLowerCase().split(',')[0]);
+                });
+
+                const all = matching.length > 0 ? matching : departures;
+                return {
+                  from: s1.name,
+                  to: s2.name,
+                  trips: all.slice(0, 8).map(d => {
+                    const depDate = new Date(d.when);
+                    const arrDate = d.plannedArrival ? new Date(d.plannedArrival) : null;
+                    const durMin = arrDate ? Math.round((arrDate - depDate) / 60000) : null;
+                    return {
+                      line: d.line?.product === 'train' ? (d.line?.name || '🚆') : (d.line?.name || '🚌'),
+                      dest: d.direction || s2.name,
+                      depTime: depDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                      arrTime: arrDate ? arrDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '',
+                      duration: durMin != null ? `${Math.floor(durMin / 60)}h ${durMin % 60}m` : '',
+                      platform: d.platform || '',
+                      delay: d.delay ? `${d.delay > 0 ? '+' : ''}${Math.round(d.delay / 60)}m` : '',
+                    };
+                  })
+                };
+              }
+
+              async function searchEFA(from, to) {
+                const r1 = await fetchWithTimeout(`https://efa.sta.bz.it/api/endpoint/XML_STOPFINDER_REQUEST?language=it&sf=${encodeURIComponent(from)}&type_sf=any`);
                 const x1 = new DOMParser().parseFromString(await r1.text(), 'text/xml');
                 const stops1 = [...x1.querySelectorAll('stop')].map(s => ({ id: s.getAttribute('ref'), name: s.getAttribute('name') })).filter(s => s.id);
-                const r2 = await fetch(`https://efa.sta.bz.it/api/endpoint/XML_STOPFINDER_REQUEST?language=it&sf=${encodeURIComponent(transitTo)}&type_sf=any`);
+                const r2 = await fetchWithTimeout(`https://efa.sta.bz.it/api/endpoint/XML_STOPFINDER_REQUEST?language=it&sf=${encodeURIComponent(to)}&type_sf=any`);
                 const x2 = new DOMParser().parseFromString(await r2.text(), 'text/xml');
                 const stops2 = [...x2.querySelectorAll('stop')].map(s => ({ id: s.getAttribute('ref'), name: s.getAttribute('name') })).filter(s => s.id);
-                if (!stops1.length || !stops2.length) {
-                  setTransitResults({ error: 'Stazione di partenza o destinazione non trovata. Prova con il nome completo.' });
-                  setTransitLoading(false);
-                  return;
-                }
-                const depId = stops1[0].id;
-                const arrId = stops2[0].id;
-                const r3 = await fetch(`https://efa.sta.bz.it/api/endpoint/XML_TRIP_REQUEST2?language=it&name_origin=${depId}&name_destination=${arrId}&type_origin=stop&type_destination=stop`);
+                if (!stops1.length || !stops2.length) return null;
+                const r3 = await fetchWithTimeout(`https://efa.sta.bz.it/api/endpoint/XML_TRIP_REQUEST2?language=it&name_origin=${stops1[0].id}&name_destination=${stops2[0].id}&type_origin=stop&type_destination=stop`);
                 const x3 = new DOMParser().parseFromString(await r3.text(), 'text/xml');
                 const trips = [...x3.querySelectorAll('trip')].slice(0, 5).map(trip => {
                   const legs = [...trip.querySelectorAll('leg')];
@@ -446,12 +491,22 @@ export default function MapPage() {
                   const duration = trip.getAttribute('duration') || '';
                   const line = depLeg?.querySelector('line')?.getAttribute('number') || '';
                   const dest = depLeg?.querySelector('direction')?.getAttribute('name') || '';
-                  return { depTime, arrTime, duration, line, dest };
+                  return { line, dest, depTime, arrTime, duration, platform: '', delay: '' };
                 });
-                if (trips.length > 0) {
-                  setTransitResults({ stops: { from: stops1[0].name, to: stops2[0].name }, trips });
+                if (trips.length === 0) return null;
+                return { from: stops1[0].name, to: stops2[0].name, trips };
+              }
+
+              try {
+                let result = null;
+                try { result = await searchTransportRest(transitFrom, transitTo); } catch {}
+                if (!result || !result.trips?.length) {
+                  try { result = await searchEFA(transitFrom, transitTo); } catch {}
+                }
+                if (result && result.trips?.length > 0) {
+                  setTransitResults(result);
                 } else {
-                  setTransitResults({ error: 'Nessuna connessione trovata. Prova con orari diversi.' });
+                  setTransitResults({ error: 'Nessuna connessione trovata. Prova con nomi di stazione più precisi (es. "München Hbf" invece di "Monaco").' });
                 }
               } catch (err) {
                 setTransitResults({ error: 'Errore durante la ricerca. Riprova.' });
@@ -470,17 +525,19 @@ export default function MapPage() {
             ) : (
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>
-                  {transitResults.stops.from} → {transitResults.stops.to}
+                  {transitResults.from} → {transitResults.to}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {transitResults.trips.map((t, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.8rem' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--primary)', minWidth: 36, textAlign: 'center' }}>{t.line || '🚌'}</span>
-                      <span style={{ fontWeight: 600 }}>{t.depTime}</span>
+                      <span style={{ fontWeight: 700, color: 'var(--primary)', minWidth: 48, textAlign: 'center', fontSize: '0.75rem' }}>{t.line}</span>
+                      <span style={{ fontWeight: 600, minWidth: 44 }}>{t.depTime}</span>
                       <span style={{ color: 'var(--text-muted)' }}>→</span>
-                      <span style={{ fontWeight: 600 }}>{t.arrTime}</span>
+                      <span style={{ fontWeight: 600, minWidth: 44 }}>{t.arrTime}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{t.duration}</span>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginLeft: 'auto' }}>{t.dest}</span>
+                      {t.platform && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Bin. {t.platform}</span>}
+                      {t.delay && <span style={{ fontSize: '0.7rem', color: t.delay.startsWith('+') ? '#ef4444' : '#10b981' }}>{t.delay}</span>}
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginLeft: 'auto', textAlign: 'right', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.dest}</span>
                     </div>
                   ))}
                 </div>

@@ -216,13 +216,15 @@ export default function AiAssistantPage() {
     let nearbyPois = '';
     if (loc && loc.lat && loc.lng) {
       try {
-        const query = `[out:json][timeout:8];
+        const query = `[out:json][timeout:10];
 (
-  node["amenity"~"restaurant|cafe|bar|pub|fast_food|biergarten"](around:1000,${loc.lat},${loc.lng});
-  node["tourism"~"attraction|museum|viewpoint|artwork|information"](around:1500,${loc.lat},${loc.lng});
+  node["amenity"~"restaurant|cafe|bar|pub|fast_food|biergarten"](around:1200,${loc.lat},${loc.lng});
+  node["tourism"~"attraction|museum|viewpoint|artwork|information|hostel|camp_site|caravan_site|guest_house"](around:2000,${loc.lat},${loc.lng});
   node["shop"~"supermarket|convenience|bakery|deli"](around:800,${loc.lat},${loc.lng});
+  node["leisure"~"park|playground|sports_centre|swimming_pool|fitness_centre"](around:1500,${loc.lat},${loc.lng});
+  node["amenity"~"pharmacy|hospital|dentist|doctors|fuel"](around:1500,${loc.lat},${loc.lng});
 );
-out body 25;`;
+out body 30;`;
         const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
           method: 'POST',
           body: `data=${encodeURIComponent(query)}`,
@@ -233,21 +235,74 @@ out body 25;`;
           const elements = overpassData.elements || [];
           if (elements.length > 0) {
             const pois = elements.map(el => {
-              const name = el.tags?.name || '';
-              const type = el.tags?.amenity || el.tags?.tourism || el.tags?.shop || '';
+              const name = el.tags?.name || el.tags?.['name:it'] || el.tags?.['name:de'] || '';
+              const type = el.tags?.amenity || el.tags?.tourism || el.tags?.shop || el.tags?.leisure || '';
               const cuisine = el.tags?.cuisine || '';
-              const addr = [el.tags?.['addr:street'], el.tags?.['addr:housenumber']].filter(Boolean).join(' ') || '';
-              const rating = el.tags?.rating || '';
+              const addr = [el.tags?.['addr:street'], el.tags?.['addr:housenumber'], el.tags?.['addr:city']].filter(Boolean).join(' ') || '';
               const phone = el.tags?.phone || el.tags?.['contact:phone'] || '';
+              const website = el.tags?.website || el.tags?.['contact:website'] || '';
               const hours = el.tags?.opening_hours || '';
+              const wheelchair = el.tags?.wheelchair || '';
+              const outdoor = el.tags?.outdoor_seating || '';
+              const description = el.tags?.description || el.tags?.['description:it'] || '';
               const dist = Math.round(Math.sqrt(Math.pow((el.lat - loc.lat) * 111320, 2) + Math.pow((el.lon - loc.lng) * 111320 * Math.cos(loc.lat * Math.PI / 180), 2)));
-              return { name, type, cuisine, addr, rating, phone, hours, dist };
+              return { name, type, cuisine, addr, phone, website, hours, wheelchair, outdoor, description, dist };
             }).filter(p => p.name);
             if (pois.length > 0) {
-              nearbyPois = '\n\n📍 LOCALI REALI TROVATI NELLA ZONA (da OpenStreetMap, raggio ~1km): ' + pois.map(p =>
-                `\n- ${p.name} (${p.type}${p.cuisine ? ', cucina: ' + p.cuisine : ''})${p.addr ? ', ' + p.addr : ''}${p.hours ? ', orari: ' + p.hours : ''}, ~${p.dist}m`
+              nearbyPois = '\n\n📍 LOCALI REALI TROVATI NELLA ZONA (da OpenStreetMap, raggio ~1-2km): ' + pois.map(p =>
+                `\n- ${p.name} (${p.type}${p.cuisine ? ', cucina: ' + p.cuisine : ''})${p.addr ? ', ' + p.addr : ''}${p.hours ? ', orari: ' + p.hours : ''}${p.phone ? ', tel: ' + p.phone : ''}${p.website ? ', sito: ' + p.website : ''}${p.wheelchair === 'yes' ? ', ♿ accessibile' : ''}${p.outdoor === 'yes' ? ', sedute esterne' : ''}${p.description ? ', ' + p.description : ''}, ~${p.dist}m`
               ).join('');
             }
+          }
+        }
+      } catch {}
+    }
+
+    let wikiInfo = '';
+    if (loc && loc.lat && loc.lng) {
+      try {
+        const wikidataQuery = `SELECT ?item ?itemLabel ?itemDescription ?sitelink WHERE {
+          ?item wdt:P31/wdt:P279* wd:Q515 .
+          ?item wdt:P625 ?coord .
+          SERVICE wikibase:around { ?item wdt:P625 bd:circle Center(${loc.lat} ${loc.lng}) Radius(5000) }
+          OPTIONAL { ?sitelink schema:about ?item . ?sitelink schema:inLanguage "it" . ?sitelink schema:isPartOf <https://it.wikipedia.org/> }
+          SERVICE wikibase:label { bd:serviceParam wikibase:language "it,en" }
+        } LIMIT 5`;
+        const wdRes = await fetch('https://query.wikidata.org/sparql', {
+          method: 'POST',
+          body: `query=${encodeURIComponent(wikidataQuery)}`,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json', 'User-Agent': 'TravelMate/1.0' },
+        });
+        if (wdRes.ok) {
+          const wdData = await wdRes.json();
+          const bindings = wdData?.results?.bindings || [];
+          if (bindings.length > 0) {
+            const items = bindings.map(b => {
+              const name = b.itemLabel?.value || '';
+              const desc = b.itemDescription?.value || '';
+              const wikiUrl = b.sitelink?.value || '';
+              return { name, desc, wikiUrl };
+            }).filter(i => i.name);
+            if (items.length > 0) {
+              wikiInfo = '\n\n🏛️ INFO TURISTICHE SULLA ZONA (Wikidata): ' + items.map(i =>
+                `\n- ${i.name}${i.desc ? ': ' + i.desc : ''}${i.wikiUrl ? ' (' + i.wikiUrl + ')' : ''}`
+              ).join('');
+            }
+          }
+        }
+      } catch {}
+    }
+
+    let destSummary = '';
+    if (currentTrip?.destination) {
+      try {
+        const wikiRes = await fetch(`https://it.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(currentTrip.destination)}`, {
+          headers: { 'Accept': 'application/json' },
+        });
+        if (wikiRes.ok) {
+          const wikiData = await wikiRes.json();
+          if (wikiData.extract) {
+            destSummary = `\n\n📖 INFO DESTINAZIONE "${currentTrip.destination}" (Wikipedia): ${wikiData.extract.substring(0, 600)}`;
           }
         }
       } catch {}
@@ -312,7 +367,7 @@ out body 25;`;
       } catch {}
     }
 
-    const systemPrompt = `IMPORTANTE: Rispondi SEMPRE e ESCLUSIVAMENTE in italiano. NON usare MAI l'inglese né altre lingue. Tutte le parole, le frasi e le spiegazioni DEVONO essere in italiano.\n\nSei un assistente di viaggio esperto e amichevole. Fornisci consigli pratici e dettagliati su ristoranti, luoghi da vedere, attività, trasporti, alloggi e qualsiasi informazione utile per i viaggiatori. Sii conciso ma informativo. ${context} ${locationInstruction}${nearbyPois}${transitInfo}\n\nQuando hai a disposizione la lista dei locali reali dalla zona, PUOI e DEVi consigliarli all'utente per nome, menzionando tipo di locale, cucina, indirizzo e distanza. Usa quelli come riferimento concreto. Se l'utente chiede qualcosa che non è nella lista, dai comunque consigli generali ma specifica che non hai dati verificati per quel tipo.\n\nQuando hai dati sui trasporti in tempo reale (treno/bus), USALI per rispondere con orari precisi. Non inventare orari: se hai i dati reali, cita orari e durata esatti.`;
+    const systemPrompt = `IMPORTANTE: Rispondi SEMPRE e ESCLUSIVAMENTE in italiano. NON usare MAI l'inglese né altre lingue. Tutte le parole, le frasi e le spiegazioni DEVONO essere in italiano.\n\nSei un assistente di viaggio esperto e amichevole. Fornisci consigli pratici e dettagliati su ristoranti, luoghi da vedere, attività, trasporti, alloggi e qualsiasi informazione utile per i viaggiatori. Sii conciso ma informativo. ${context} ${locationInstruction}${nearbyPois}${transitInfo}${wikiInfo}${destSummary}\n\nQuando hai a disposizione dati reali (locali, orari, info turistiche), USALI e cita nomi, indirizzi, orari e dettagli specifici. Mai inventare: se non hai dati, dilo chiaramente. Per ristoranti e locali, cita nome, tipo, cucina, orari e distanza dalla posizione. Per trasporti, cita orari precisi e durata. Per attrazioni turistiche, cita nome e descrizione.`;
 
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {

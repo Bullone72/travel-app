@@ -23,7 +23,6 @@ export default function MapPage() {
   const [detecting, setDetecting] = useState(false);
   const [altRoutes, setAltRoutes] = useState([]);
   const [selectedAlts, setSelectedAlts] = useState([]);
-  const [transitQuery, setTransitQuery] = useState('');
   const [transitFrom, setTransitFrom] = useState('');
   const [transitTo, setTransitTo] = useState('');
   const [transitResults, setTransitResults] = useState(null);
@@ -573,7 +572,7 @@ export default function MapPage() {
                     return (
                     <div key={i} style={{
                       padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                      background: 'var(--bg)', fontSize: '0.8rem',
+                      background: 'var(--bg-card)', fontSize: '0.8rem', color: 'var(--text-primary)',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
@@ -634,13 +633,13 @@ export default function MapPage() {
               return (
                 <div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 8 }}>
-                    Servono almeno 2 punti con coordinate. Usa "📍 Geocodifica" o "📍 Trova posizioni" nella mappa qui sotto.
+                    Servono almeno 2 punti con coordinate. Usa "📍 Trova posizioni" nella mappa qui sotto.
                   </p>
                   <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => {
                     const items = dayItems.filter(i => i.location || i.departure || i.arrival);
                     items.forEach(i => handleGeocode(i));
                   }}>
-                    📍 Geocodifica tutti i punti del giorno {activeDay}
+                    📍 Trova posizioni
                   </button>
                 </div>
               );
@@ -649,72 +648,36 @@ export default function MapPage() {
             const end = allPts[allPts.length - 1];
             const waypoints = allPts.slice(1, -1);
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '10px 8px' }} onClick={() => openInHereWeGo(start, end, waypoints)}>
-                  🗺️ HERE WeGo
-                </button>
-                <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '10px 8px', background: '#4285F4' }} onClick={() => openInGoogleMaps(start, end)}>
-                  📍 Google Maps
-                </button>
-                <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '10px 8px', background: '#33CCFF' }} onClick={() => openInWaze(start, end)}>
-                  💙 Waze
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Da: {start.label} → A: {end.label}
+                  {waypoints.length > 0 && ` (${waypoints.length} tappe)`}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <button className="btn btn-primary" style={{ padding: '12px 8px', fontSize: '0.85rem', fontWeight: 600 }} onClick={() => openInHereWeGo(start, end, waypoints)}>
+                    🗺️ HERE
+                  </button>
+                  <button className="btn btn-primary" style={{ padding: '12px 8px', fontSize: '0.85rem', fontWeight: 600, background: '#4285F4' }} onClick={() => openInGoogleMaps(start, end)}>
+                    📍 Google
+                  </button>
+                  <button className="btn btn-primary" style={{ padding: '12px 8px', fontSize: '0.85rem', fontWeight: 600, background: '#33CCFF' }} onClick={() => openInWaze(start, end)}>
+                    💙 Waze
+                  </button>
+                </div>
               </div>
             );
           })()}
         </div>
       )}
 
-      {viewMode === 'itinerary' && (
-        <div style={{ marginBottom: 12 }}>
-          {getDaySegments().map((seg, s) => {
-            const alts = altRoutes[s] || [];
-            const sel = selectedAlts[s] || 0;
-            return (
-              <div key={s} style={{ marginBottom: 8, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-card)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                  🛣️ Tragitto {s + 1}: {seg.a.label || 'A'} → {seg.b.label || 'B'}
-                </div>
-                {loadingRoute && alts.length === 0 ? (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Calcolo percorso...</div>
-                ) : alts.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {alts.map((r, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          const next = [...selectedAlts];
-                          next[s] = i;
-                          setSelectedAlts(next);
-                        }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-                          borderRadius: 8, border: sel === i ? '2px solid var(--primary)' : '1px solid var(--border)',
-                          background: sel === i ? 'var(--primary-bg, rgba(102,126,234,0.1))' : 'var(--bg-input)',
-                          cursor: 'pointer', textAlign: 'left', width: '100%', fontSize: '0.8rem',
-                          color: sel === i ? 'var(--primary)' : 'var(--text-secondary)',
-                        }}
-                      >
-                        <span style={{
-                          width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          background: sel === i ? 'var(--primary)' : 'var(--border)', color: sel === i ? '#fff' : 'var(--text-muted)',
-                          fontWeight: 700, fontSize: '0.7rem', flexShrink: 0,
-                        }}>{i + 1}</span>
-                        <span style={{ flex: 1 }}>
-                          <strong>{formatKm(r.distanceKm)} km</strong> · {formatDuration(Math.round(r.durationMin))}
-                        </span>
-                        {sel === i && <span style={{ color: 'var(--primary)', fontWeight: 700 }}>✓</span>}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    {seg.a.lat && seg.b.lat ? 'Nessuna alternativa trovata' : 'Inserisci partenza e arrivo'}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      {viewMode === 'itinerary' && getDaySegments().length > 0 && routeKm !== null && (
+        <div style={{ marginBottom: 12, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-card)' }}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+            📊 Riepilogo giorno {activeDay}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            {routeKm} km · {formatDuration(routeDuration)}
+          </div>
         </div>
       )}
 

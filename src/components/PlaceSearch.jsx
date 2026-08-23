@@ -127,13 +127,13 @@ export default function PlaceSearch({ location, onShowOnMap, onDetect, detecting
               <div key={i}
                 onClick={() => { if (onShowOnMap) onShowOnMap([p]); }}
                 style={{
-                  padding: '10px 12px', background: 'var(--bg)', borderRadius: 8,
+                  padding: '10px 12px', background: 'var(--bg-card)', borderRadius: 8,
                   border: '1px solid var(--border)', fontSize: '0.85rem',
                   cursor: onShowOnMap ? 'pointer' : 'default',
                   transition: 'border-color .15s, background .15s',
                 }}
                 onMouseEnter={e => { if (onShowOnMap) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--bg-card)'; } }}
-                onMouseLeave={e => { if (onShowOnMap) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg)'; } }}
+                onMouseLeave={e => { if (onShowOnMap) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)'; } }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ fontWeight: 600 }}>{i + 1}. {p.name}</div>

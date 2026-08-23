@@ -3,8 +3,12 @@ import PlaceInput from './PlaceInput';
 
 const CATEGORIES = [
   { value: 'restaurant', label: '🍽️ Ristoranti' },
-  { value: 'attraction', label: '🏛️ Cosa vedere' },
+  { value: 'bar', label: '☕ Bar' },
   { value: 'hotel', label: '🏨 Hotel' },
+  { value: 'pharmacy', label: '💊 Farmacie' },
+  { value: 'attraction', label: '🏛️ Cosa vedere' },
+  { value: 'hospital', label: '🏥 Ospedali' },
+  { value: 'fuel', label: '⛽ Benzinaio' },
 ];
 
 export default function PlaceSearch({ location, onShowOnMap, onDetect, detecting, onLocationChange }) {
@@ -129,7 +133,7 @@ export default function PlaceSearch({ location, onShowOnMap, onDetect, detecting
                   transition: 'border-color .15s, background .15s',
                 }}
                 onMouseEnter={e => { if (onShowOnMap) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--bg-card)'; } }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg)'; }}
+                onMouseLeave={e => { if (onShowOnMap) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg)'; } }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ fontWeight: 600 }}>{i + 1}. {p.name}</div>
@@ -139,17 +143,31 @@ export default function PlaceSearch({ location, onShowOnMap, onDetect, detecting
                         className="btn btn-secondary btn-sm"
                         style={{ fontSize: '0.7rem', padding: '4px 8px', whiteSpace: 'nowrap', textDecoration: 'none' }}
                         onClick={e => e.stopPropagation()}>
-                        📞 Chiama
+                        📞
+                      </a>
+                    )}
+                    {p.website && (
+                      <a href={p.website} target="_blank" rel="noopener noreferrer"
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '0.7rem', padding: '4px 8px', whiteSpace: 'nowrap', textDecoration: 'none' }}
+                        onClick={e => e.stopPropagation()}>
+                        🌐
                       </a>
                     )}
                     <button className="btn btn-secondary btn-sm" style={{ fontSize: '0.7rem', padding: '4px 8px', whiteSpace: 'nowrap' }}
                       onClick={e => { e.stopPropagation(); openInOsm(p); }}>
-                      🧭 Vedi su OSM
+                      🧭
                     </button>
                   </div>
                 </div>
-                {p.address && <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>📍 {p.address}</div>}
-                {p.phone && <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>📞 {p.phone}</div>}
+                {p.address && <div style={{ color: 'var(--text-secondary)', marginTop: 2, fontSize: '0.8rem' }}>📍 {p.address}</div>}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {p.cuisine && <span>🍽️ {p.cuisine}</span>}
+                  {p.hours && <span>🕐 {p.hours}</span>}
+                  {p.distM != null && <span>📏 ~{p.distM >= 1000 ? `${(p.distM / 1000).toFixed(1)}km` : `${p.distM}m`}</span>}
+                  {p.wheelchair === 'yes' && <span>♿</span>}
+                  {p.outdoor === 'yes' && <span>🪑 Esterno</span>}
+                </div>
               </div>
             ))}
           </div>
@@ -171,12 +189,16 @@ async function fetchWithTimeout(url, options, timeoutMs = 20000) {
 
 async function searchRealPlaces(lat, lng, type, locationName) {
   const amenityMap = {
-    restaurant: '"amenity"~"restaurant|fast_food|bar|cafe"',
-    attraction: '"tourism"~"attraction|museum|viewpoint|zoo|theme_park"',
+    restaurant: '"amenity"~"restaurant|fast_food"',
+    bar: '"amenity"~"bar|cafe|pub|biergarten"',
     hotel: '"tourism"~"hotel|guest_house|hostel|apartment"',
+    pharmacy: '"amenity"~"pharmacy"',
+    attraction: '"tourism"~"attraction|museum|viewpoint|zoo|theme_park|artwork|information"',
+    hospital: '"amenity"~"hospital|clinic|doctors|dentist"',
+    fuel: '"amenity"~"fuel"',
   };
   const amenityFilter = amenityMap[type] || amenityMap.restaurant;
-  const radius = type === 'attraction' ? 8000 : 3000;
+  const radius = type === 'attraction' ? 8000 : type === 'fuel' ? 5000 : 3000;
   const query = `[out:json][timeout:25];(node[${amenityFilter}](around:${radius},${lat},${lng});way[${amenityFilter}](around:${radius},${lat},${lng}););out center tags 40;`;
   const headers = { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'TravelMate/1.0 (travel assistant app)' };
   const endpoints = [
@@ -196,16 +218,21 @@ async function searchRealPlaces(lat, lng, type, locationName) {
       const results = [];
       for (const el of (data?.elements || [])) {
         const t = el.tags || {};
-        const name = t.name || t['name:it'] || '';
+        const name = t.name || t['name:it'] || t['name:de'] || '';
         if (!name) continue;
-        const address = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ');
-        const phone = t['phone'] || t['contact:phone'] || '';
-        const website = t['website'] || t['contact:website'] || '';
+        const address = [t['addr:street'], t['addr:housenumber'], t['addr:city']].filter(Boolean).join(' ');
+        const phone = t.phone || t['contact:phone'] || '';
+        const website = t.website || t['contact:website'] || '';
+        const hours = t.opening_hours || '';
+        const cuisine = t.cuisine || '';
+        const wheelchair = t.wheelchair || '';
+        const outdoor = t.outdoor_seating || '';
         const plat = el.lat !== undefined ? el.lat : el.center?.lat;
         const plng = el.lon !== undefined ? el.lon : el.center?.lon;
         if (plat === undefined || plng === undefined || isNaN(plat) || isNaN(plng)) continue;
-        results.push({ name, address, phone, website, lat: plat, lng: plng });
-        if (results.length >= 15) break;
+        const distM = Math.round(Math.sqrt(Math.pow((plat - lat) * 111320, 2) + Math.pow((plng - lng) * 111320 * Math.cos(lat * Math.PI / 180), 2)));
+        results.push({ name, address, phone, website, hours, cuisine, wheelchair, outdoor, lat: plat, lng: plng, distM });
+        if (results.length >= 20) break;
       }
       if (results.length > 0) return results;
     } catch {
@@ -213,9 +240,10 @@ async function searchRealPlaces(lat, lng, type, locationName) {
     }
   }
   try {
-    const label = type === 'restaurant' ? 'ristoranti' : type === 'hotel' ? 'hotel' : 'attrazioni turistiche';
+    const label = type === 'restaurant' ? 'ristoranti' : type === 'hotel' ? 'hotel' : type === 'bar' ? 'bar' : type === 'pharmacy' ? 'farmacie' : type === 'hospital' ? 'ospedali' : type === 'fuel' ? 'distributori benzina' : 'attrazioni turistiche';
     const city = (locationName || '').split(',')[0].trim();
-    const queries = [`${label} ${city}`.trim(), `${city} ${type === 'restaurant' ? 'restaurant' : type === 'hotel' ? 'hotel' : 'tourism attraction'}`.trim()];
+    const enType = type === 'restaurant' ? 'restaurant' : type === 'hotel' ? 'hotel' : type === 'bar' ? 'cafe' : type === 'pharmacy' ? 'pharmacy' : type === 'hospital' ? 'hospital' : type === 'fuel' ? 'gas station' : 'tourism attraction';
+    const queries = [`${label} ${city}`.trim(), `${city} ${enType}`.trim()];
     for (const q of queries) {
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=10`;
       const res = await fetchWithTimeout(url, {
@@ -228,11 +256,9 @@ async function searchRealPlaces(lat, lng, type, locationName) {
         if (!el.display_name) continue;
         results.push({
           name: el.display_name.split(',')[0],
-          address: el.display_name.split(',').slice(1).join(',').trim(),
-          phone: '',
-          website: '',
-          lat: parseFloat(el.lat),
-          lng: parseFloat(el.lon),
+          address: el.display_name.split(',').slice(1, 3).join(',').trim(),
+          phone: '', website: '', hours: '', cuisine: '', distM: null,
+          lat: parseFloat(el.lat), lng: parseFloat(el.lon),
         });
         if (results.length >= 10) break;
       }

@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { ITINERARY_TYPES, calculateTotalKm, formatDuration, formatKm } from '../utils/helpers';
 import PlaceSearch from '../components/PlaceSearch';
 import {
-  createMap, addMarker, addRoutePolyline, addRouteSegment, fitMapToPoints, clearMarkers,
+  createMap, addMarker, addMarkerWithPopup, addRoutePolyline, addRouteSegment, fitMapToPoints, clearMarkers,
   geocodeNominatim, getRouteDistance, getRouteAlternatives, openInHereWeGo, openInGoogleMaps, openInWaze, DAY_COLORS,
 } from '../components/LeafletMap';
 
@@ -23,6 +23,11 @@ export default function MapPage() {
   const [detecting, setDetecting] = useState(false);
   const [altRoutes, setAltRoutes] = useState([]);
   const [selectedAlts, setSelectedAlts] = useState([]);
+  const [transitQuery, setTransitQuery] = useState('');
+  const [transitFrom, setTransitFrom] = useState('');
+  const [transitTo, setTransitTo] = useState('');
+  const [transitResults, setTransitResults] = useState(null);
+  const [transitLoading, setTransitLoading] = useState(false);
 
   useEffect(() => {
     loadTripData(id);
@@ -185,7 +190,7 @@ export default function MapPage() {
     clearMarkers(map);
 
     if (searchPoints.length > 0) {
-      searchPoints.forEach((p, i) => addMarker(map, p.lat, p.lng, i + 1, p.name));
+      searchPoints.forEach((p, i) => addMarkerWithPopup(map, p.lat, p.lng, p, i + 1));
       fitMapToPoints(map, searchPoints.map(p => ({ lat: p.lat, lng: p.lng })));
       return;
     }
@@ -389,6 +394,101 @@ export default function MapPage() {
       <h1 className="page-title">🗺️ Mappa</h1>
 
       <PlaceSearch location={searchLocation} onShowOnMap={showSearchOnMap} onDetect={detectCurrentLocation} detecting={detecting} onLocationChange={handleLocationChange} />
+
+      <div className="card" style={{ margin: '12px 0 16px' }}>
+        <div className="card-title" style={{ marginBottom: 8 }}>🚂 Trasporti pubblici (Südtirol / EFA)</div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
+          Cerca orari reali di treni e bus in Alto Adige.
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input
+            type="text"
+            placeholder="Da (es. San Candido)"
+            value={transitFrom}
+            onChange={e => setTransitFrom(e.target.value)}
+            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.85rem' }}
+          />
+          <input
+            type="text"
+            placeholder="A (es. Dobbiaco)"
+            value={transitTo}
+            onChange={e => setTransitTo(e.target.value)}
+            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.85rem' }}
+          />
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={async () => {
+              if (!transitFrom.trim() || !transitTo.trim()) return;
+              setTransitLoading(true);
+              setTransitResults(null);
+              try {
+                const r1 = await fetch(`https://efa.sta.bz.it/api/endpoint/XML_STOPFINDER_REQUEST?language=it&sf=${encodeURIComponent(transitFrom)}&type_sf=any`);
+                const x1 = new DOMParser().parseFromString(await r1.text(), 'text/xml');
+                const stops1 = [...x1.querySelectorAll('stop')].map(s => ({ id: s.getAttribute('ref'), name: s.getAttribute('name') })).filter(s => s.id);
+                const r2 = await fetch(`https://efa.sta.bz.it/api/endpoint/XML_STOPFINDER_REQUEST?language=it&sf=${encodeURIComponent(transitTo)}&type_sf=any`);
+                const x2 = new DOMParser().parseFromString(await r2.text(), 'text/xml');
+                const stops2 = [...x2.querySelectorAll('stop')].map(s => ({ id: s.getAttribute('ref'), name: s.getAttribute('name') })).filter(s => s.id);
+                if (!stops1.length || !stops2.length) {
+                  setTransitResults({ error: 'Stazione di partenza o destinazione non trovata. Prova con il nome completo.' });
+                  setTransitLoading(false);
+                  return;
+                }
+                const depId = stops1[0].id;
+                const arrId = stops2[0].id;
+                const r3 = await fetch(`https://efa.sta.bz.it/api/endpoint/XML_TRIP_REQUEST2?language=it&name_origin=${depId}&name_destination=${arrId}&type_origin=stop&type_destination=stop`);
+                const x3 = new DOMParser().parseFromString(await r3.text(), 'text/xml');
+                const trips = [...x3.querySelectorAll('trip')].slice(0, 5).map(trip => {
+                  const legs = [...trip.querySelectorAll('leg')];
+                  const depLeg = legs[0];
+                  const arrLeg = legs[legs.length - 1];
+                  const depTime = depLeg?.querySelector('departure')?.getAttribute('datetime') || '';
+                  const arrTime = arrLeg?.querySelector('arrival')?.getAttribute('datetime') || '';
+                  const duration = trip.getAttribute('duration') || '';
+                  const line = depLeg?.querySelector('line')?.getAttribute('number') || '';
+                  const dest = depLeg?.querySelector('direction')?.getAttribute('name') || '';
+                  return { depTime, arrTime, duration, line, dest };
+                });
+                if (trips.length > 0) {
+                  setTransitResults({ stops: { from: stops1[0].name, to: stops2[0].name }, trips });
+                } else {
+                  setTransitResults({ error: 'Nessuna connessione trovata. Prova con orari diversi.' });
+                }
+              } catch (err) {
+                setTransitResults({ error: 'Errore durante la ricerca. Riprova.' });
+              }
+              setTransitLoading(false);
+            }}
+            disabled={transitLoading || !transitFrom.trim() || !transitTo.trim()}
+          >
+            {transitLoading ? '⏳' : '🔍 Cerca'}
+          </button>
+        </div>
+        {transitResults && (
+          <div style={{ marginTop: 4 }}>
+            {transitResults.error ? (
+              <p style={{ fontSize: '0.8rem', color: 'var(--warning)' }}>{transitResults.error}</p>
+            ) : (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {transitResults.stops.from} → {transitResults.stops.to}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {transitResults.trips.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.8rem' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--primary)', minWidth: 36, textAlign: 'center' }}>{t.line || '🚌'}</span>
+                      <span style={{ fontWeight: 600 }}>{t.depTime}</span>
+                      <span style={{ color: 'var(--text-muted)' }}>→</span>
+                      <span style={{ fontWeight: 600 }}>{t.arrTime}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{t.duration}</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginLeft: 'auto' }}>{t.dest}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {searchPoints.length > 0 && (
         <div style={{ marginBottom: 12 }}>

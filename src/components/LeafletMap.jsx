@@ -28,6 +28,38 @@ export function addMarker(map, lat, lng, index = '', title = '') {
   return L.marker([lat, lng], { icon }).bindPopup(title).addTo(map);
 }
 
+const POI_COLORS = {
+  restaurant: '#ef4444', bar: '#f59e0b', cafe: '#f59e0b', pub: '#f59e0b',
+  hotel: '#8b5cf6', hostel: '#8b5cf6', guest_house: '#8b5cf6',
+  pharmacy: '#10b981', hospital: '#ef4444', clinic: '#ef4444',
+  fuel: '#6b7280', museum: '#3b82f6', attraction: '#ec4899',
+  viewpoint: '#06b6d4', supermarket: '#22c55e', bakery: '#f97316',
+};
+
+export function addMarkerWithPopup(map, lat, lng, poi, index = '') {
+  const type = poi.type || poi.cuisine || 'place';
+  const color = POI_COLORS[type] || '#667eea';
+  const html = index
+    ? `<div style="background:${color};color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${index}</div>`
+    : `<div style="background:${color};color:white;border-radius:50%;width:14px;height:14px;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>`;
+  const icon = L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 14] });
+
+  let popupHtml = `<div style="font-family:system-ui;min-width:200px;max-width:280px;font-size:13px;">`;
+  popupHtml += `<div style="font-weight:700;font-size:14px;margin-bottom:4px;">${poi.name || ''}</div>`;
+  if (poi.type) popupHtml += `<div style="color:#666;margin-bottom:4px;">${poi.type}${poi.cuisine ? ' · ' + poi.cuisine : ''}</div>`;
+  if (poi.address) popupHtml += `<div style="margin-bottom:3px;">📍 ${poi.address}</div>`;
+  if (poi.hours) popupHtml += `<div style="margin-bottom:3px;">🕐 ${poi.hours}</div>`;
+  if (poi.distM != null) popupHtml += `<div style="margin-bottom:3px;">📏 ~${poi.distM >= 1000 ? (poi.distM / 1000).toFixed(1) + 'km' : poi.distM + 'm'}</div>`;
+  popupHtml += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">`;
+  if (poi.phone) popupHtml += `<a href="tel:${poi.phone.replace(/[^+\d]/g, '')}" style="display:inline-flex;align-items:center;gap:3px;padding:4px 8px;background:#10b981;color:white;border-radius:6px;text-decoration:none;font-size:11px;">📞 Chiama</a>`;
+  if (poi.website) popupHtml += `<a href="${poi.website}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:3px;padding:4px 8px;background:#3b82f6;color:white;border-radius:6px;text-decoration:none;font-size:11px;">🌐 Sito</a>`;
+  popupHtml += `<a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:3px;padding:4px 8px;background:#6b7280;color:white;border-radius:6px;text-decoration:none;font-size:11px;">🗺️ Mappa</a>`;
+  if (poi.wheelchair === 'yes') popupHtml += `<span style="padding:4px 8px;background:#8b5cf6;color:white;border-radius:6px;font-size:11px;">♿ Accessibile</span>`;
+  popupHtml += `</div></div>`;
+
+  return L.marker([lat, lng], { icon }).bindPopup(popupHtml, { maxWidth: 300 }).addTo(map);
+}
+
 export function addRoutePolyline(map, points, color = '#667eea') {
   if (points.length < 2) return;
   const latlngs = points.map(p => [p.lat, p.lng]);

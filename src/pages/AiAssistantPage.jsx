@@ -343,7 +343,8 @@ out body 30;`;
                   });
                   const all = matching.length > 0 ? matching : departures;
                   if (all.length > 0) {
-                    transitResult = all.slice(0, 5).map((d, i) => {
+                    const seen = new Set();
+                    transitResult = all.slice(0, 8).map((d, i) => {
                       const depDate = new Date(d.when);
                       const arrDate = d.plannedArrival ? new Date(d.plannedArrival) : null;
                       const durMin = arrDate ? Math.round((arrDate - depDate) / 60000) : null;
@@ -351,9 +352,12 @@ out body 30;`;
                       const dest = d.direction || s2.name;
                       const dep = depDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                       const arr = arrDate ? arrDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
-                      const dur = durMin != null ? `${Math.floor(durMin / 60)}h ${durMin % 60}m` : '';
-                      return `  ${i + 1}. ${line} ${dep}→${arr} (${dur}) ${d.platform ? 'Bin.' + d.platform : ''} verso ${dest}`;
-                    });
+                      const dur = durMin != null ? `${durMin} min` : '';
+                      const key = `${dep}-${line}`;
+                      if (seen.has(key)) return null;
+                      seen.add(key);
+                      return `  ${i + 1}. ${line} ${dep}→${arr} (${dur}) verso ${dest}`;
+                    }).filter(Boolean);
                     transitInfo = `\n\n🚂 ORARI TRENO/BUS REALI (fonte: DB Transport, dati live):\nPercorso da "${s1.name}" a "${s2.name}":\n${transitResult.join('\n')}`;
                   }
                 }

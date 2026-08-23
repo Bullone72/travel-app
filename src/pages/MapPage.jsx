@@ -395,25 +395,25 @@ export default function MapPage() {
 
       <PlaceSearch location={searchLocation} onShowOnMap={showSearchOnMap} onDetect={detectCurrentLocation} detecting={detecting} onLocationChange={handleLocationChange} />
 
-      <div className="card" style={{ margin: '12px 0 16px' }}>
+      <div className="card" style={{ margin: '12px 0 16px', overflow: 'hidden' }}>
         <div className="card-title" style={{ marginBottom: 8 }}>🚂 Trasporti pubblici</div>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
-          Cerca orari reali di treni e bus in tutta Europa (DB, ÖBB, SBB, Trenitalia, SNCF, SAD...).
+          Cerca orari reali di treni e bus in tutta Europa.
         </p>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
           <input
             type="text"
-            placeholder="Da (es. München Hbf, Roma Termini)"
+            placeholder="Da (es. München Hbf, Roma Termini, Wien Hbf)"
             value={transitFrom}
             onChange={e => setTransitFrom(e.target.value)}
-            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.85rem' }}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.85rem', boxSizing: 'border-box' }}
           />
           <input
             type="text"
-            placeholder="A (es. Innsbruck Hbf, Firenze SMN)"
+            placeholder="A (es. Innsbruck Hbf, Firenze SMN, Berlin Hbf)"
             value={transitTo}
             onChange={e => setTransitTo(e.target.value)}
-            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.85rem' }}
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.85rem', boxSizing: 'border-box' }}
           />
           <button
             className="btn btn-primary btn-sm"
@@ -426,6 +426,16 @@ export default function MapPage() {
                 const c = new AbortController();
                 const t = setTimeout(() => c.abort(), ms);
                 try { return await fetch(url, { ...opts, signal: c.signal }); } finally { clearTimeout(t); }
+              }
+
+              function dedupTrips(trips) {
+                const seen = new Set();
+                return trips.filter(t => {
+                  const key = `${t.depTime}-${t.line}`;
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                });
               }
 
               async function searchTransportRest(from, to) {
@@ -441,35 +451,34 @@ export default function MapPage() {
                 const s2 = stops2.find(s => s.type === 'stop');
                 if (!s2) return null;
 
-                const r3 = await fetchWithTimeout(`https://v6.db.transport.rest/stops/${s1.id}/departures?results=12&stopovers=true`);
+                const r3 = await fetchWithTimeout(`https://v6.db.transport.rest/stops/${s1.id}/departures?results=20&stopovers=true`);
                 if (!r3.ok) return null;
                 const departures = await r3.json();
 
                 const matching = departures.filter(d => {
                   const destName = (d.direction || '').toLowerCase();
-                  return destName.includes(s2.name.toLowerCase().split(',')[0]) ||
-                         destName.includes(to.toLowerCase().split(',')[0]);
+                  const target = s2.name.toLowerCase().split(',')[0];
+                  return destName.includes(target) || destName.includes(to.toLowerCase().split(',')[0]);
                 });
 
                 const all = matching.length > 0 ? matching : departures;
-                return {
-                  from: s1.name,
-                  to: s2.name,
-                  trips: all.slice(0, 8).map(d => {
-                    const depDate = new Date(d.when);
-                    const arrDate = d.plannedArrival ? new Date(d.plannedArrival) : null;
-                    const durMin = arrDate ? Math.round((arrDate - depDate) / 60000) : null;
-                    return {
-                      line: d.line?.product === 'train' ? (d.line?.name || '🚆') : (d.line?.name || '🚌'),
-                      dest: d.direction || s2.name,
-                      depTime: depDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                      arrTime: arrDate ? arrDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '',
-                      duration: durMin != null ? `${Math.floor(durMin / 60)}h ${durMin % 60}m` : '',
-                      platform: d.platform || '',
-                      delay: d.delay ? `${d.delay > 0 ? '+' : ''}${Math.round(d.delay / 60)}m` : '',
-                    };
-                  })
-                };
+                const raw = all.slice(0, 12).map(d => {
+                  const depDate = new Date(d.when);
+                  const arrDate = d.plannedArrival ? new Date(d.plannedArrival) : null;
+                  const durMin = arrDate ? Math.round((arrDate - depDate) / 60000) : null;
+                  let lineName = d.line?.name || '';
+                  if (lineName.length > 12) lineName = lineName.slice(0, 10) + '…';
+                  const dest = d.direction || '';
+                  return {
+                    line: lineName,
+                    dest,
+                    depTime: depDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                    arrTime: arrDate ? arrDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '',
+                    duration: durMin != null ? `${durMin} min` : '',
+                    platform: d.platform || '',
+                  };
+                });
+                return { from: s1.name, to: s2.name, trips: dedupTrips(raw) };
               }
 
               async function searchEFA(from, to) {
@@ -482,7 +491,7 @@ export default function MapPage() {
                 if (!stops1.length || !stops2.length) return null;
                 const r3 = await fetchWithTimeout(`https://efa.sta.bz.it/api/endpoint/XML_TRIP_REQUEST2?language=it&name_origin=${stops1[0].id}&name_destination=${stops2[0].id}&type_origin=stop&type_destination=stop`);
                 const x3 = new DOMParser().parseFromString(await r3.text(), 'text/xml');
-                const trips = [...x3.querySelectorAll('trip')].slice(0, 5).map(trip => {
+                const raw = [...x3.querySelectorAll('trip')].slice(0, 8).map(trip => {
                   const legs = [...trip.querySelectorAll('leg')];
                   const depLeg = legs[0];
                   const arrLeg = legs[legs.length - 1];
@@ -491,10 +500,17 @@ export default function MapPage() {
                   const duration = trip.getAttribute('duration') || '';
                   const line = depLeg?.querySelector('line')?.getAttribute('number') || '';
                   const dest = depLeg?.querySelector('direction')?.getAttribute('name') || '';
-                  return { line, dest, depTime, arrTime, duration, platform: '', delay: '' };
+                  const depDate = depTime ? new Date(depTime) : null;
+                  const arrDate = arrTime ? new Date(arrTime) : null;
+                  return {
+                    line, dest,
+                    depTime: depDate ? depDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : depTime,
+                    arrTime: arrDate ? arrDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : arrTime,
+                    duration, platform: '',
+                  };
                 });
-                if (trips.length === 0) return null;
-                return { from: stops1[0].name, to: stops2[0].name, trips };
+                if (raw.length === 0) return null;
+                return { from: stops1[0].name, to: stops2[0].name, trips: dedupTrips(raw) };
               }
 
               try {
@@ -506,38 +522,49 @@ export default function MapPage() {
                 if (result && result.trips?.length > 0) {
                   setTransitResults(result);
                 } else {
-                  setTransitResults({ error: 'Nessuna connessione trovata. Prova con nomi di stazione più precisi (es. "München Hbf" invece di "Monaco").' });
+                  setTransitResults({ error: 'Nessuna connessione trovata. Prova con il nome completo della stazione (es. "München Hbf" invece di "Monaco").' });
                 }
-              } catch (err) {
+              } catch {
                 setTransitResults({ error: 'Errore durante la ricerca. Riprova.' });
               }
               setTransitLoading(false);
             }}
             disabled={transitLoading || !transitFrom.trim() || !transitTo.trim()}
           >
-            {transitLoading ? '⏳' : '🔍 Cerca'}
+            {transitLoading ? '⏳ Cerco...' : '🔍 Cerca collegamenti'}
           </button>
         </div>
         {transitResults && (
           <div style={{ marginTop: 4 }}>
             {transitResults.error ? (
-              <p style={{ fontSize: '0.8rem', color: 'var(--warning)' }}>{transitResults.error}</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--warning)', margin: 0 }}>{transitResults.error}</p>
             ) : (
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>
                   {transitResults.from} → {transitResults.to}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {transitResults.trips.map((t, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', fontSize: '0.8rem' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--primary)', minWidth: 48, textAlign: 'center', fontSize: '0.75rem' }}>{t.line}</span>
-                      <span style={{ fontWeight: 600, minWidth: 44 }}>{t.depTime}</span>
-                      <span style={{ color: 'var(--text-muted)' }}>→</span>
-                      <span style={{ fontWeight: 600, minWidth: 44 }}>{t.arrTime}</span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{t.duration}</span>
-                      {t.platform && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Bin. {t.platform}</span>}
-                      {t.delay && <span style={{ fontSize: '0.7rem', color: t.delay.startsWith('+') ? '#ef4444' : '#10b981' }}>{t.delay}</span>}
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginLeft: 'auto', textAlign: 'right', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.dest}</span>
+                    <div key={i} style={{
+                      padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                      background: 'var(--bg)', fontSize: '0.8rem',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontWeight: 700, color: '#fff', background: 'var(--primary)',
+                          padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', whiteSpace: 'nowrap',
+                        }}>{t.line || '🚇'}</span>
+                        <span style={{ fontWeight: 600 }}>{t.depTime}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>→</span>
+                        <span style={{ fontWeight: 600 }}>{t.arrTime}</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{t.duration}</span>
+                        {t.platform && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--bg-card)', padding: '1px 6px', borderRadius: 4 }}>Bin {t.platform}</span>}
+                      </div>
+                      {t.dest && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 3 }}>
+                          → {t.dest}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

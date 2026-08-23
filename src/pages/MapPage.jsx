@@ -99,6 +99,13 @@ export default function MapPage() {
     }
     if (item.lat && item.lng) pts.push({ lat: item.lat, lng: item.lng, kind: 'loc', label: item.location });
     if (item.arrivalLat && item.arrivalLng) pts.push({ lat: item.arrivalLat, lng: item.arrivalLng, kind: 'arr', label: item.arrival });
+    if (item.returnTrip && pts.length >= 2 && item.departureLat && item.departureLng) {
+      const last = pts[pts.length - 1];
+      const first = pts[0];
+      if (Math.abs(last.lat - first.lat) > 0.0001 || Math.abs(last.lng - first.lng) > 0.0001) {
+        pts.push({ lat: first.lat, lng: first.lng, kind: 'return', label: `↩ ${item.departure}` });
+      }
+    }
     return pts;
   }
 
@@ -431,7 +438,7 @@ export default function MapPage() {
               function dedupTrips(trips) {
                 const seen = new Set();
                 return trips.filter(t => {
-                  const key = `${t.depTime}-${t.line}`;
+                  const key = `${t.depTime}-${t.line}-${t.dest}`;
                   if (seen.has(key)) return false;
                   seen.add(key);
                   return true;
@@ -439,17 +446,31 @@ export default function MapPage() {
               }
 
               async function searchTransportRest(from, to) {
-                const r1 = await fetchWithTimeout(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(from)}&addresses=false&poi=false`);
+                const r1 = await fetchWithTimeout(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(from)}&addresses=false`);
                 if (!r1.ok) return null;
                 const stops1 = await r1.json();
-                const s1 = stops1.find(s => s.type === 'stop');
+                let s1 = stops1.find(s => s.type === 'stop') || stops1.find(s => s.type === 'station') || stops1[0];
                 if (!s1) return null;
+                if (s1.type !== 'stop' && s1.type !== 'station') {
+                  const subR = await fetchWithTimeout(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(s1.name)}&addresses=false&poi=false`);
+                  if (subR.ok) {
+                    const subStops = await subR.json();
+                    s1 = subStops.find(s => s.type === 'stop') || s1;
+                  }
+                }
 
-                const r2 = await fetchWithTimeout(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(to)}&addresses=false&poi=false`);
+                const r2 = await fetchWithTimeout(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(to)}&addresses=false`);
                 if (!r2.ok) return null;
                 const stops2 = await r2.json();
-                const s2 = stops2.find(s => s.type === 'stop');
+                let s2 = stops2.find(s => s.type === 'stop') || stops2.find(s => s.type === 'station') || stops2[0];
                 if (!s2) return null;
+                if (s2.type !== 'stop' && s2.type !== 'station') {
+                  const subR = await fetchWithTimeout(`https://v6.db.transport.rest/locations?query=${encodeURIComponent(s2.name)}&addresses=false&poi=false`);
+                  if (subR.ok) {
+                    const subStops = await subR.json();
+                    s2 = subStops.find(s => s.type === 'stop') || s2;
+                  }
+                }
 
                 const r3 = await fetchWithTimeout(`https://v6.db.transport.rest/stops/${s1.id}/departures?results=20&stopovers=true`);
                 if (!r3.ok) return null;
@@ -458,20 +479,20 @@ export default function MapPage() {
                 const matching = departures.filter(d => {
                   const destName = (d.direction || '').toLowerCase();
                   const target = s2.name.toLowerCase().split(',')[0];
-                  return destName.includes(target) || destName.includes(to.toLowerCase().split(',')[0]);
+                  const toCity = to.toLowerCase().split(',')[0];
+                  return destName.includes(target) || destName.includes(toCity);
                 });
 
                 const all = matching.length > 0 ? matching : departures;
-                const raw = all.slice(0, 12).map(d => {
+                const raw = all.slice(0, 15).map(d => {
                   const depDate = new Date(d.when);
                   const arrDate = d.plannedArrival ? new Date(d.plannedArrival) : null;
                   const durMin = arrDate ? Math.round((arrDate - depDate) / 60000) : null;
-                  let lineName = d.line?.name || '';
-                  if (lineName.length > 12) lineName = lineName.slice(0, 10) + '…';
+                  const lineName = d.line?.name || '';
+                  const product = d.line?.product || '';
                   const dest = d.direction || '';
                   return {
-                    line: lineName,
-                    dest,
+                    line: lineName, product, dest,
                     depTime: depDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                     arrTime: arrDate ? arrDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '',
                     duration: durMin != null ? `${durMin} min` : '',
@@ -544,16 +565,21 @@ export default function MapPage() {
                   {transitResults.from} → {transitResults.to}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {transitResults.trips.map((t, i) => (
+                  {transitResults.trips.map((t, i) => {
+                    const productColors = { train: '#3b82f6', bus: '#10b981', tram: '#f59e0b', subway: '#8b5cf6', watercraft: '#06b6d4', taxi: '#6b7280', aircraft: '#ef4444', car: '#6b7280', cablecar: '#f97316' };
+                    const badgeColor = productColors[t.product] || 'var(--primary)';
+                    const badgeIcon = { train: '🚆', bus: '🚌', tram: '🚊', subway: '🚇', watercraft: '⛴️', taxi: '🚕', car: '🚗', cablecar: '🚡' };
+                    const icon = badgeIcon[t.product] || '🚆';
+                    return (
                     <div key={i} style={{
                       padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
                       background: 'var(--bg)', fontSize: '0.8rem',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
-                          fontWeight: 700, color: '#fff', background: 'var(--primary)',
+                          fontWeight: 700, color: '#fff', background: badgeColor,
                           padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', whiteSpace: 'nowrap',
-                        }}>{t.line || '🚇'}</span>
+                        }}>{icon} {t.line || ''}</span>
                         <span style={{ fontWeight: 600 }}>{t.depTime}</span>
                         <span style={{ color: 'var(--text-muted)' }}>→</span>
                         <span style={{ fontWeight: 600 }}>{t.arrTime}</span>
@@ -566,7 +592,8 @@ export default function MapPage() {
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
